@@ -67,3 +67,10 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** Rename vitest.config.ts to vitest.config.mts. Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true`. Leave the warning in place.
 **Reasoning.** `pnpm test:unit` printed a real Vite config-loader warning because vitest.config.ts uses ESM syntax with no `type` field declaring it. The brief names the file vitest.config.ts, so renaming it was not an option. Setting `type: module` is the standard fix and matches the direction Vite says its config loader is heading. Verified safe by rerunning lint, typecheck, test:unit and build afterward.
 **Cut.** Nothing. All four verification commands stayed green after the change.
+
+## 2026-09-14: Zamp-derived tokens mapped onto shadcn variables
+
+**Decision.** A small token file holds the Zamp-derived palette and radii; shadcn's variables alias those tokens so every generated component follows the palette without edits.
+**Alternatives.** Hand-written components; keeping shadcn's default neutral theme.
+**Reasoning.** Radix primitives give keyboard and screen-reader behaviour for free, which matters more than owning every component. Aliasing keeps one source of truth for colour and lets a unit test enforce AA contrast on every pair.
+**Cut.** A custom component library. Depth belongs in the review flow, not in buttons.
