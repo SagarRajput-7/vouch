@@ -679,6 +679,9 @@ Replace the generated colour values so every shadcn component uses the Zamp-deri
   --color-danger-bg: var(--danger-bg);
   --color-brand: var(--accent);
   --color-brand-foreground: var(--accent-fg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border-strong: var(--border-strong);
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius);
   --radius-lg: var(--radius);
