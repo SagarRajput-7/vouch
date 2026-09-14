@@ -68,8 +68,12 @@ export const jobsRepo = {
       .where(eq(jobs.id, id));
   },
 
-  async countQueued(): Promise<number> {
-    const [row] = await getDb().select({ n: count() }).from(jobs).where(and(eq(jobs.status, "queued")));
+  /** With a workspace id, counts only that workspace's queued jobs; without one, counts globally. */
+  async countQueued(workspaceId?: string): Promise<number> {
+    const where = workspaceId
+      ? and(eq(jobs.status, "queued"), eq(jobs.workspaceId, workspaceId))
+      : eq(jobs.status, "queued");
+    const [row] = await getDb().select({ n: count() }).from(jobs).where(where);
     return Number(row?.n ?? 0);
   },
 };

@@ -3,6 +3,7 @@ import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { startGuestSession } from "@/lib/auth/session";
 import { drain } from "@/lib/queue/drain";
+import { jobsRepo } from "@/lib/repo/jobs";
 import { pipelineRunsRepo } from "@/lib/repo/pipeline-runs";
 import { GET as listDocuments, POST as upload } from "@/app/api/documents/route";
 import { GET as detail } from "@/app/api/documents/[id]/route";
@@ -110,5 +111,20 @@ describe("documents API", () => {
     const finalBody = (await finalRes.json()) as { document: { status: string }; trace: Array<{ stage: string }> };
     expect(finalBody.document.status).toBe("rejected");
     expect(finalBody.trace.map((t) => t.stage)).toEqual(["extract"]);
+  });
+
+  it("keeps another workspace's queued jobs out of the status response", async () => {
+    // Flush anything already queued so the first session's own workspace is a known 0 before
+    // proving it does not pick up a second workspace's separately queued job.
+    await drain({ runnerId: "test", reason: "test" });
+
+    const other = await startGuestSession();
+    await jobsRepo.enqueue({ workspaceId: other.info.workspaceId, documentId: null, kind: "process_document" });
+
+    // Drains are disabled in this file (VOUCH_DISABLE_AUTO_DRAIN=true), so the job the other
+    // workspace just enqueued stays queued through this call.
+    const st = await status(req("/api/workspace/status"));
+    const stBody = (await st.json()) as { queuedJobs: number };
+    expect(stBody.queuedJobs).toBe(0);
   });
 });
