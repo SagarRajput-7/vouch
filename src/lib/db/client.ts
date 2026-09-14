@@ -1,3 +1,4 @@
+import { mkdirSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { drizzle as drizzleNode } from "drizzle-orm/node-postgres";
@@ -22,13 +23,26 @@ const holder: Holder = ((globalThis as unknown as { __vouchDb?: Holder }).__vouc
 
 const MIGRATIONS = "drizzle";
 
+/**
+ * Ensures a PGlite on-disk data directory exists before PGlite opens it.
+ * PGlite's Node fs backend does a non-recursive mkdir, so a fresh checkout's
+ * missing parent (".data") crashes construction otherwise. ":memory:" is
+ * returned untouched since there is no directory to create.
+ */
+export function ensurePgliteDir(dir: string): string {
+  if (dir === ":memory:") return dir;
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 function create(): Db {
   if (env.DATABASE_URL) {
     holder.pool = new Pool({ connectionString: env.DATABASE_URL, max: 5 });
     holder.flavour = "postgres";
     return drizzleNode({ client: holder.pool, schema }) as unknown as Db;
   }
-  holder.pglite = env.PGLITE_DATA_DIR === ":memory:" ? new PGlite() : new PGlite(env.PGLITE_DATA_DIR);
+  const pgliteDir = ensurePgliteDir(env.PGLITE_DATA_DIR);
+  holder.pglite = pgliteDir === ":memory:" ? new PGlite() : new PGlite(pgliteDir);
   holder.flavour = "pglite";
   return drizzlePglite({ client: holder.pglite, schema }) as unknown as Db;
 }
