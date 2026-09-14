@@ -70,7 +70,7 @@ A running log of the real calls made while building Vouch. Newest entries at the
 
 ## 2026-09-14: Zamp-derived tokens mapped onto shadcn variables
 
-**Decision.** A small token file holds the Zamp-derived palette and radii; shadcn's variables alias those tokens so every generated component follows the palette without edits.
+**Decision.** A small token file holds the Zamp-derived palette and radii; shadcn 4, built on Base UI primitives, aliases its variables to those tokens so every generated component follows the palette without edits.
 **Alternatives.** Hand-written components; keeping shadcn's default neutral theme.
-**Reasoning.** Radix primitives give keyboard and screen-reader behaviour for free, which matters more than owning every component. Aliasing keeps one source of truth for colour and lets a unit test enforce AA contrast on every pair.
+**Reasoning.** Base UI primitives give keyboard and screen-reader behaviour for free, which matters more than owning every component. Aliasing keeps one source of truth for colour and lets a unit test enforce AA contrast on every pair.
 **Cut.** A custom component library. Depth belongs in the review flow, not in buttons.
