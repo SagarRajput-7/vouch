@@ -3,8 +3,22 @@ import { describe, expect, it } from "vitest";
 import { auth } from "@/lib/auth/server";
 import { startGuestSession, sessionFromHeaders } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { workspaces } from "@/lib/db/schema";
+import { documents, workspaces } from "@/lib/db/schema";
 import { workspacesRepo } from "@/lib/repo/workspaces";
+
+function seedDocument(workspaceId: string, sha256: string) {
+  return getDb()
+    .insert(documents)
+    .values({
+      workspaceId,
+      sha256,
+      originalFilename: "invoice.pdf",
+      mime: "application/pdf",
+      byteSize: 1024,
+      blobKey: `blobs/${workspaceId}/${sha256}`,
+    })
+    .returning();
+}
 
 function cookieHeader(from: Headers): Headers {
   const setCookie = from
@@ -58,20 +72,64 @@ describe("guest sessions", () => {
 });
 
 describe("workspace promotion", () => {
-  it("promotes a workspace to an account, changing owner, kind, and clearing expiry", async () => {
+  it("reassigns the workspace when the new owner has none yet", async () => {
     const a = await startGuestSession();
-    const b = await startGuestSession();
+    // A real user row with no workspace yet: sign in anonymously directly, bypassing
+    // startGuestSession's own findOrCreateForUser call so no workspace exists for it.
+    const { response } = await auth.api.signInAnonymous({ returnHeaders: true });
+    if (!response?.user) throw new Error("expected an anonymous user");
+    const freshUserId = response.user.id;
 
-    await workspacesRepo.promoteToAccount(a.info.workspaceId, b.info.userId);
+    const result = await workspacesRepo.promoteToAccount(a.info.workspaceId, freshUserId);
+    expect(result).toEqual({ mode: "reassigned", workspaceId: a.info.workspaceId });
 
     const promoted = await workspacesRepo.getById(a.info.workspaceId);
-    expect(promoted?.ownerUserId).toBe(b.info.userId);
+    expect(promoted?.ownerUserId).toBe(freshUserId);
     expect(promoted?.kind).toBe("account");
     expect(promoted?.expiresAt).toBeNull();
+  });
 
-    // b already owned an active guest workspace before the promotion; the unique
-    // partial index allows only one active workspace per owner, so promoting a's
-    // workspace onto b's id must retire b's original one rather than conflict.
-    expect(await workspacesRepo.getById(b.info.workspaceId)).toBeNull();
+  it("merges into the new owner's existing workspace, keeping both documents", async () => {
+    const source = await startGuestSession();
+    const target = await startGuestSession();
+    await seedDocument(source.info.workspaceId, "sha-source-only");
+    await seedDocument(target.info.workspaceId, "sha-target-only");
+
+    const result = await workspacesRepo.promoteToAccount(
+      source.info.workspaceId,
+      target.info.userId,
+    );
+    expect(result).toEqual({ mode: "merged", workspaceId: target.info.workspaceId });
+
+    const targetWorkspace = await workspacesRepo.getById(target.info.workspaceId);
+    expect(targetWorkspace?.ownerUserId).toBe(target.info.userId);
+    expect(targetWorkspace?.deletedAt).toBeNull();
+
+    const movedDocs = await getDb().query.documents.findMany({
+      where: eq(documents.workspaceId, target.info.workspaceId),
+    });
+    expect(movedDocs.map((d) => d.sha256).sort()).toEqual(["sha-source-only", "sha-target-only"]);
+
+    // getById filters out deleted rows, so query the source workspace directly.
+    const sourceWorkspaceRow = await getDb().query.workspaces.findFirst({
+      where: eq(workspaces.id, source.info.workspaceId),
+    });
+    expect(sourceWorkspaceRow?.deletedAt).not.toBeNull();
+  });
+
+  it("drops the source's duplicate document and keeps the target's copy on merge", async () => {
+    const source = await startGuestSession();
+    const target = await startGuestSession();
+    await seedDocument(source.info.workspaceId, "sha-shared");
+    const [targetDoc] = await seedDocument(target.info.workspaceId, "sha-shared");
+
+    await workspacesRepo.promoteToAccount(source.info.workspaceId, target.info.userId);
+
+    const sharedDocs = await getDb().query.documents.findMany({
+      where: eq(documents.sha256, "sha-shared"),
+    });
+    expect(sharedDocs.length).toBe(1);
+    expect(sharedDocs[0]?.workspaceId).toBe(target.info.workspaceId);
+    expect(sharedDocs[0]?.id).toBe(targetDoc.id);
   });
 });

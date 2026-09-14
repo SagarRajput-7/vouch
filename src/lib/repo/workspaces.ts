@@ -1,10 +1,12 @@
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { workspaces } from "@/lib/db/schema";
+import { auditLog, documents, invoices, jobs, usageLedger, workspaces } from "@/lib/db/schema";
 
 const GUEST_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type Workspace = typeof workspaces.$inferSelect;
+export type PromoteResult =
+  { mode: "reassigned"; workspaceId: string } | { mode: "merged"; workspaceId: string };
 
 export const workspacesRepo = {
   /**
@@ -47,33 +49,88 @@ export const workspacesRepo = {
 
   /**
    * `workspaces_owner_active_idx` allows only one active workspace per
-   * owner, so reassigning ownership to a user who already has one (a
-   * second device linking the same account, for example) would otherwise
-   * violate that constraint. Soft-deleting the target's other active
-   * workspace first, in the same transaction, keeps the invariant and
-   * makes the just-promoted workspace the sole survivor.
+   * owner, so promoting a workspace to a user who already has one (a
+   * returning user signing back in on a second device, for example) can
+   * never simply reassign ownership: that would give the target two active
+   * rows and violate the index, and retiring the target's own workspace
+   * would silently discard its data. Instead this merges the source into
+   * the target: documents whose content (sha256) already exists in the
+   * target are dropped from the source (their dependents cascade away with
+   * them), everything else workspace-scoped moves over, and the now-empty
+   * source workspace is soft-deleted. The target workspace row itself is
+   * never deleted or reassigned. When the target user has no workspace yet,
+   * the common case, this is a plain reassignment as before.
    */
-  async promoteToAccount(workspaceId: string, newOwnerUserId: string): Promise<void> {
-    await getDb().transaction(async (tx) => {
+  async promoteToAccount(
+    sourceWorkspaceId: string,
+    newOwnerUserId: string,
+  ): Promise<PromoteResult> {
+    return getDb().transaction(async (tx) => {
+      const target = await tx.query.workspaces.findFirst({
+        where: and(
+          eq(workspaces.ownerUserId, newOwnerUserId),
+          isNull(workspaces.deletedAt),
+          ne(workspaces.id, sourceWorkspaceId),
+        ),
+      });
+
+      if (!target) {
+        await tx
+          .update(workspaces)
+          .set({
+            ownerUserId: newOwnerUserId,
+            kind: "account",
+            expiresAt: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(workspaces.id, sourceWorkspaceId));
+        return { mode: "reassigned", workspaceId: sourceWorkspaceId };
+      }
+
+      const targetDocs = await tx
+        .select({ sha256: documents.sha256 })
+        .from(documents)
+        .where(eq(documents.workspaceId, target.id));
+      const duplicateShas = targetDocs.map((d) => d.sha256);
+
+      // Cascades (see the documents/invoices/jobs/pipeline_runs foreign keys)
+      // remove each duplicate's dependents along with it.
       await tx
-        .update(workspaces)
-        .set({ deletedAt: new Date() })
+        .delete(documents)
         .where(
           and(
-            eq(workspaces.ownerUserId, newOwnerUserId),
-            isNull(workspaces.deletedAt),
-            ne(workspaces.id, workspaceId),
+            eq(documents.workspaceId, sourceWorkspaceId),
+            inArray(documents.sha256, duplicateShas),
           ),
         );
+
+      await tx
+        .update(documents)
+        .set({ workspaceId: target.id })
+        .where(eq(documents.workspaceId, sourceWorkspaceId));
+      await tx
+        .update(invoices)
+        .set({ workspaceId: target.id })
+        .where(eq(invoices.workspaceId, sourceWorkspaceId));
+      await tx
+        .update(jobs)
+        .set({ workspaceId: target.id })
+        .where(eq(jobs.workspaceId, sourceWorkspaceId));
+      await tx
+        .update(usageLedger)
+        .set({ workspaceId: target.id })
+        .where(eq(usageLedger.workspaceId, sourceWorkspaceId));
+      await tx
+        .update(auditLog)
+        .set({ workspaceId: target.id })
+        .where(eq(auditLog.workspaceId, sourceWorkspaceId));
+
       await tx
         .update(workspaces)
-        .set({
-          ownerUserId: newOwnerUserId,
-          kind: "account",
-          expiresAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(workspaces.id, workspaceId));
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(eq(workspaces.id, sourceWorkspaceId));
+
+      return { mode: "merged", workspaceId: target.id };
     });
   },
 

@@ -28,7 +28,10 @@ export const auth = betterAuth({
       emailDomainName: "guest.vouch.local",
       onLinkAccount: async ({ anonymousUser, newUser }) => {
         const ws = await workspacesRepo.findOrCreateForUser(anonymousUser.user.id, true);
-        await workspacesRepo.promoteToAccount(ws.id, newUser.user.id);
+        const result = await workspacesRepo.promoteToAccount(ws.id, newUser.user.id);
+        console.log(
+          `workspace ${result.mode} on account link: workspaceId=${result.workspaceId} userId=${newUser.user.id}`,
+        );
       },
     }),
   ],
