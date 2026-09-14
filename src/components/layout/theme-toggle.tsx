@@ -11,7 +11,7 @@ export function ThemeToggle() {
     () => true,
     () => false,
   );
-  if (!mounted) return <span className="inline-block size-9" aria-hidden="true" />;
+  if (!mounted) return <span className="inline-block size-8" aria-hidden="true" />;
   const dark = resolvedTheme === "dark";
   return (
     <Button

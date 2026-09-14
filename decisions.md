@@ -74,3 +74,10 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** Hand-written components; keeping shadcn's default neutral theme.
 **Reasoning.** Base UI primitives give keyboard and screen-reader behaviour for free, which matters more than owning every component. Aliasing keeps one source of truth for colour and lets a unit test enforce AA contrast on every pair.
 **Cut.** A custom component library. Depth belongs in the review flow, not in buttons.
+
+## 2026-09-14: Keep the shadcn/tailwind.css import
+
+**Decision.** Keep `@import "shadcn/tailwind.css";` in globals.css alongside the Zamp token import, in addition to the brief's literal Step 6 text.
+**Alternatives.** Drop the import, since the brief's resolution only names `tw-animate-css` as an import to keep; hand-write the missing custom variants directly in globals.css instead of importing shadcn's own copy.
+**Reasoning.** This shadcn 4 generation ships `data-open`, `data-closed`, `data-horizontal`, `data-vertical` and `data-active` as custom variants defined only in that file. Separator, Tabs, Dialog, DropdownMenu and Tooltip reference them directly, and Separator renders with no width or height at all without it, not just without animation. Keeping the import follows the same principle the brief already applies to `tw-animate-css`: keep the infrastructure the installed shadcn version needs, and override values, not structure.
+**Cut.** Hand-rolled duplicates of shadcn's custom variants. Importing the maintained file avoids drift from whatever future `shadcn add` commands assume is present.

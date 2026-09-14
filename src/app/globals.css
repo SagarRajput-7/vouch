@@ -6,25 +6,25 @@
 
 :root,
 .dark {
-  --background: var(--bg);
-  --foreground: var(--text);
-  --card: var(--surface);
-  --card-foreground: var(--text);
-  --popover: var(--surface);
-  --popover-foreground: var(--text);
-  --primary: var(--text);
-  --primary-foreground: var(--bg);
-  --secondary: var(--surface-2);
-  --secondary-foreground: var(--text);
-  --muted: var(--surface-2);
-  --muted-foreground: var(--muted);
-  --accent: var(--surface-2);
-  --accent-foreground: var(--text);
-  --destructive: var(--danger);
-  --border: var(--border);
-  --input: var(--border-strong);
-  --ring: var(--accent);
-  --radius: var(--radius);
+  --background: var(--v-bg);
+  --foreground: var(--v-text);
+  --card: var(--v-surface);
+  --card-foreground: var(--v-text);
+  --popover: var(--v-surface);
+  --popover-foreground: var(--v-text);
+  --primary: var(--v-text);
+  --primary-foreground: var(--v-bg);
+  --secondary: var(--v-surface-2);
+  --secondary-foreground: var(--v-text);
+  --muted: var(--v-surface-2);
+  --muted-foreground: var(--v-muted);
+  --accent: var(--v-surface-2);
+  --accent-foreground: var(--v-text);
+  --destructive: var(--v-danger);
+  --border: var(--v-border);
+  --input: var(--v-border-strong);
+  --ring: var(--v-accent);
+  --radius: var(--v-radius);
 }
 
 @theme inline {
@@ -46,21 +46,21 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-success: var(--success);
-  --color-success-bg: var(--success-bg);
-  --color-warning: var(--warning);
-  --color-warning-bg: var(--warning-bg);
-  --color-danger: var(--danger);
-  --color-danger-bg: var(--danger-bg);
-  --color-brand: var(--accent);
-  --color-brand-foreground: var(--accent-fg);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-border-strong: var(--border-strong);
-  --radius-sm: var(--radius-sm);
-  --radius-md: var(--radius);
-  --radius-lg: var(--radius);
-  --radius-pill: var(--radius-pill);
+  --color-success: var(--v-success);
+  --color-success-bg: var(--v-success-bg);
+  --color-warning: var(--v-warning);
+  --color-warning-bg: var(--v-warning-bg);
+  --color-danger: var(--v-danger);
+  --color-danger-bg: var(--v-danger-bg);
+  --color-brand: var(--v-accent);
+  --color-brand-foreground: var(--v-accent-fg);
+  --color-surface: var(--v-surface);
+  --color-surface-2: var(--v-surface-2);
+  --color-border-strong: var(--v-border-strong);
+  --radius-sm: var(--v-radius-sm);
+  --radius-md: var(--v-radius);
+  --radius-lg: var(--v-radius);
+  --radius-pill: var(--v-radius-pill);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -79,7 +79,7 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
   :focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--v-accent);
     outline-offset: 2px;
   }
   .tabular {
@@ -91,9 +91,9 @@
     top: -3rem;
     z-index: 100;
     padding: 0.5rem 0.75rem;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
+    background: var(--v-surface);
+    border: 1px solid var(--v-border-strong);
+    border-radius: var(--v-radius-sm);
   }
   .skip-link:focus {
     top: 1rem;

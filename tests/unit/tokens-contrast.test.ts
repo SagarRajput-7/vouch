@@ -11,7 +11,7 @@ function block(selector: string): Record<string, string> {
   const close = css.indexOf("}", open);
   const body = css.slice(open + 1, close);
   const vars: Record<string, string> = {};
-  for (const m of body.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})/g)) vars[m[1]] = m[2];
+  for (const m of body.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})/g)) vars[m[1].replace(/^v-/, "")] = m[2];
   return vars;
 }
 
