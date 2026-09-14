@@ -81,3 +81,10 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** Drop the import, since the brief's resolution only names `tw-animate-css` as an import to keep; hand-write the missing custom variants directly in globals.css instead of importing shadcn's own copy.
 **Reasoning.** This shadcn 4 generation ships `data-open`, `data-closed`, `data-horizontal`, `data-vertical` and `data-active` as custom variants defined only in that file. Separator, Tabs, Dialog, DropdownMenu and Tooltip reference them directly, and Separator renders with no width or height at all without it, not just without animation. Keeping the import follows the same principle the brief already applies to `tw-animate-css`: keep the infrastructure the installed shadcn version needs, and override values, not structure.
 **Cut.** Hand-rolled duplicates of shadcn's custom variants. Importing the maintained file avoids drift from whatever future `shadcn add` commands assume is present.
+
+## 2026-09-14: PGlite data directory bootstrap
+
+**Decision.** `create()` in `src/lib/db/client.ts` creates the on-disk PGlite data directory recursively before opening it, through a small exported helper, `ensurePgliteDir(dir)`.
+**Alternatives.** Document that a fresh clone must create `.data/pglite` itself before the first `pnpm dev`; ship a postinstall script that creates it.
+**Reasoning.** One-command setup is a stated criterion, and the installed `@electric-sql/pglite@0.5.8` Node filesystem backend does a single, non-recursive `mkdirSync` for its data directory, so a fresh checkout with no `.data` yet crashed PGlite construction with ENOENT the first time anything booted without `DATABASE_URL` set. This task's Better Auth CLI schema generation also ran from the already-installed `@better-auth/cli` devDependency rather than `pnpm dlx @latest`, for the same reproducibility reason.
+**Cut.** A postinstall hook. It would run, and create a directory, for every install of the project, including everyone who only ever points `DATABASE_URL` at Postgres and never touches PGlite.

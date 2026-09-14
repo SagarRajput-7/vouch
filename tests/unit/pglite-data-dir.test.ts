@@ -31,4 +31,17 @@ describe("ensurePgliteDir", () => {
   it("returns \":memory:\" untouched", () => {
     expect(ensurePgliteDir(":memory:")).toBe(":memory:");
   });
+
+  it("is idempotent when the directory already exists", () => {
+    const root = path.join(tmpdir(), `vouch-pglite-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const nested = path.join(root, "nested", "pglite");
+    roots.push(root);
+
+    const first = ensurePgliteDir(nested);
+    const second = ensurePgliteDir(nested);
+
+    expect(first).toBe(nested);
+    expect(second).toBe(nested);
+    expect(existsSync(nested)).toBe(true);
+  });
 });
