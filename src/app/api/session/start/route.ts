@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
+import { safeNext } from "@/lib/api/safe-next";
 import { getSession, startGuestSession } from "@/lib/auth/session";
-
-function safeNext(raw: string | null): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
-  return raw;
-}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
