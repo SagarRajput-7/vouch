@@ -1,0 +1,23 @@
+{
+  "name": "mismatch-total",
+  "docType": "invoice",
+  "fields": {
+    "vendorName": { "value": "Meridian Office Supplies Ltd.", "page": 1 },
+    "invoiceNumber": { "value": "MOS/INV/88213", "page": 1 },
+    "issueDate": { "value": "2026-07-21", "display": "21/07/2026", "page": 1 },
+    "dueDate": { "value": "2026-08-20", "display": "20/08/2026", "page": 1 },
+    "currency": { "value": "USD", "page": 1 },
+    "subtotal": { "value": "754.00", "display": "754.00", "page": 1 },
+    "tax": { "value": "37.70", "display": "37.70", "page": 1 },
+    "shipping": null,
+    "discount": null,
+    "total": { "value": "719.70", "display": "719.70", "page": 1 }
+  },
+  "lineItems": [
+    { "description": "Copier paper A4, 80gsm, box of 5 reams", "quantity": "12", "unitPrice": "38.50", "amount": "462.00" },
+    { "description": "Toner cartridge TN-2420", "quantity": "3", "unitPrice": "89.00", "amount": "267.00" },
+    { "description": "Delivery", "quantity": "1", "unitPrice": "25.00", "amount": "25.00" }
+  ],
+  "expectedIssues": ["V003"],
+  "notes": "Printed total is a digit transposition of 791.70."
+}

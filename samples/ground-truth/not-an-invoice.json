@@ -1,0 +1,11 @@
+{
+  "name": "not-an-invoice",
+  "docType": "other",
+  "fields": {
+    "vendorName": null, "invoiceNumber": null, "issueDate": null, "dueDate": null, "currency": null,
+    "subtotal": null, "tax": null, "shipping": null, "discount": null, "total": null
+  },
+  "lineItems": [],
+  "expectedIssues": ["V011"],
+  "notes": "Bank statement page."
+}

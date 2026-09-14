@@ -1,0 +1,22 @@
+{
+  "name": "clean-digital",
+  "docType": "invoice",
+  "fields": {
+    "vendorName": { "value": "Halcyon Cloud Services Inc.", "page": 1 },
+    "invoiceNumber": { "value": "HCS-2026-0417", "page": 1 },
+    "issueDate": { "value": "2026-08-03", "display": "Aug 3, 2026", "page": 1 },
+    "dueDate": { "value": "2026-09-02", "display": "Sep 2, 2026", "page": 1 },
+    "currency": { "value": "USD", "page": 1 },
+    "subtotal": { "value": "1630.00", "display": "1,630.00", "page": 1 },
+    "tax": { "value": "134.48", "display": "134.48", "page": 1 },
+    "shipping": null,
+    "discount": null,
+    "total": { "value": "1764.48", "display": "1,764.48", "page": 1 }
+  },
+  "lineItems": [
+    { "description": "Pro plan, August 2026", "quantity": "1", "unitPrice": "1200.00", "amount": "1200.00", "display": { "unitPrice": "1,200.00", "amount": "1,200.00" } },
+    { "description": "Additional seats", "quantity": "4", "unitPrice": "45.00", "amount": "180.00" },
+    { "description": "Priority support", "quantity": "1", "unitPrice": "250.00", "amount": "250.00" }
+  ],
+  "expectedIssues": []
+}

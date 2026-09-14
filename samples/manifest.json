@@ -1,0 +1,26 @@
+[
+  {
+    "name": "clean-digital",
+    "file": "clean-digital.pdf",
+    "mime": "application/pdf",
+    "sha256": "4d30da61af1e73eb7fe7138cc2671efcd21080e6215bb88a3a65815a4d881456",
+    "pages": 1,
+    "kind": "pdf_text"
+  },
+  {
+    "name": "mismatch-total",
+    "file": "mismatch-total.pdf",
+    "mime": "application/pdf",
+    "sha256": "60d0382b17c1cd98ed90ee34f281592a590e0ae949d402fb2854031dedfabd36",
+    "pages": 1,
+    "kind": "pdf_text"
+  },
+  {
+    "name": "not-an-invoice",
+    "file": "not-an-invoice.pdf",
+    "mime": "application/pdf",
+    "sha256": "97a499fcbce10ee86829add01fa319f17808662a3b4533dd94cdbc313d88005b",
+    "pages": 1,
+    "kind": "pdf_text"
+  }
+]

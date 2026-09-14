@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Invoice HCS-2026-0417</title>
+<style>
+  body { font-family: Helvetica, Arial, sans-serif; color: #111; margin: 48px; font-size: 12px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.5px; }
+  .row { display: flex; justify-content: space-between; gap: 24px; }
+  .muted { color: #666; }
+  table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #ddd; }
+  th { font-size: 11px; text-transform: uppercase; color: #666; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .totals { margin-left: auto; width: 260px; margin-top: 16px; }
+  .totals div { display: flex; justify-content: space-between; padding: 4px 6px; }
+  .totals .grand { font-weight: bold; border-top: 2px solid #111; font-size: 14px; }
+  .footer { margin-top: 40px; color: #666; font-size: 11px; }
+</style></head>
+<body>
+  <div class="row">
+    <div>
+      <h1>Halcyon Cloud Services Inc.</h1>
+      <div class="muted">1200 Harbor Blvd, Suite 400<br>Seattle, WA 98101, United States<br>billing@halcyoncloud.example</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:22px;font-weight:bold">INVOICE</div>
+      <div>Invoice number: <strong>HCS-2026-0417</strong></div>
+      <div>Issue date: Aug 3, 2026</div>
+      <div>Due date: Sep 2, 2026</div>
+      <div>Currency: USD</div>
+    </div>
+  </div>
+  <div style="margin-top:28px">
+    <div class="muted">Bill to</div>
+    <div><strong>Northgate Robotics Pvt. Ltd.</strong><br>14 Residency Road, Bengaluru 560025, India</div>
+  </div>
+  <table>
+    <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead>
+    <tbody>
+      <tr><td>Pro plan, August 2026</td><td class="num">1</td><td class="num">1,200.00</td><td class="num">1,200.00</td></tr>
+      <tr><td>Additional seats</td><td class="num">4</td><td class="num">45.00</td><td class="num">180.00</td></tr>
+      <tr><td>Priority support</td><td class="num">1</td><td class="num">250.00</td><td class="num">250.00</td></tr>
+    </tbody>
+  </table>
+  <div class="totals">
+    <div><span>Subtotal</span><span>1,630.00</span></div>
+    <div><span>Sales tax (8.25%)</span><span>134.48</span></div>
+    <div class="grand"><span>Total due</span><span>USD 1,764.48</span></div>
+  </div>
+  <div class="footer">Payment terms: Net 30. Please reference the invoice number with your payment. Thank you for your business.</div>
+</body></html>
