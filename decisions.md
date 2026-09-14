@@ -39,3 +39,31 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** npm, which is installed by default.
 **Reasoning.** Faster installs in CI and strict dependency resolution catch phantom imports early.
 **Cut.** Nothing.
+
+## 2026-09-14: Keep create-next-app's generated AGENTS.md and CLAUDE.md
+
+**Decision.** Keep the AGENTS.md and CLAUDE.md files create-next-app@16 generates by default, unmodified.
+**Alternatives.** Delete them, since the brief does not mention them; hand-edit AGENTS.md's wording.
+**Reasoning.** AGENTS.md says it is written and re-added by `next dev`, so removing or editing it just recreates an uncommitted change the next time someone runs dev. CLAUDE.md is a one-line import of it. Neither conflicts with anything the brief specifies.
+**Cut.** Nothing. Left as framework-generated content rather than treated as project prose.
+
+## 2026-09-14: pnpm-workspace.yaml build script approvals
+
+**Decision.** Approve esbuild's install script. Block @prisma/client and better-sqlite3.
+**Alternatives.** Approve all three. Block all three. Run `pnpm approve-builds` interactively instead of editing the file directly.
+**Reasoning.** esbuild is a trusted, already-working build tool that tsx and vitest need. @prisma/client and better-sqlite3 arrive only as optional adapters of @better-auth/cli. This project uses drizzle-orm with PGlite and pg, never Prisma or SQLite, so their install scripts have nothing to do.
+**Cut.** Native compilation for better-sqlite3 and Prisma client generation. Neither is reachable from this codebase.
+
+## 2026-09-14: next typegen before typecheck
+
+**Decision.** Set the typecheck script to `next typegen && tsc --noEmit`.
+**Alternatives.** Keep a bare `tsc --noEmit`. Strip the scaffold's `LayoutProps` typed-route usage from layout.tsx instead.
+**Reasoning.** The scaffolded layout.tsx uses Next 16's `LayoutProps<"/">`, a type that only exists in the gitignored `.next/types/` directory after `next dev`, `next build`, or `next typegen` has run. A bare `tsc --noEmit` fails on a fresh clone, before `build` ever populates that directory, which breaks the brief's own lint, typecheck, test, build order. `next typegen` is Next's own command for generating those types without a full build.
+**Cut.** Nothing. Kept the scaffold's generated layout code instead of removing a framework feature to avoid the dependency.
+
+## 2026-09-14: type module in package.json
+
+**Decision.** Add `"type": "module"` to package.json.
+**Alternatives.** Rename vitest.config.ts to vitest.config.mts. Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true`. Leave the warning in place.
+**Reasoning.** `pnpm test:unit` printed a real Vite config-loader warning because vitest.config.ts uses ESM syntax with no `type` field declaring it. The brief names the file vitest.config.ts, so renaming it was not an option. Setting `type: module` is the standard fix and matches the direction Vite says its config loader is heading. Verified safe by rerunning lint, typecheck, test:unit and build afterward.
+**Cut.** Nothing. All four verification commands stayed green after the change.
