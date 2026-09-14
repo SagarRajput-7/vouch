@@ -1,4 +1,5 @@
 import { createEnv } from "@t3-oss/env-nextjs";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { z } from "zod";
 import { resolveLlmMode } from "./llm-mode";
 
@@ -50,6 +51,12 @@ export const llmMode = resolveLlmMode(env.LLM_MODE, env.ANTHROPIC_API_KEY);
 
 export function authSecret(): string {
   if (env.BETTER_AUTH_SECRET) return env.BETTER_AUTH_SECRET;
-  if (isProduction) throw new Error("BETTER_AUTH_SECRET is required in production");
+  // `next build` always runs with NODE_ENV=production while it collects page data, which
+  // imports route modules (and therefore constructs `auth`) without ever serving a real
+  // request. NEXT_PHASE distinguishes that build step from an actual production server, so
+  // the fallback secret is allowed there and this still throws for a real production boot.
+  const isBuildPhase = process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD;
+  if (isProduction && !isBuildPhase)
+    throw new Error("BETTER_AUTH_SECRET is required in production");
   return "vouch-development-secret-not-for-production";
 }
