@@ -44,4 +44,13 @@ export const pipelineRunsRepo = {
       orderBy: [asc(pipelineRuns.startedAt)],
     });
   },
+
+  /** Manual retry reprocesses from scratch: clears every checkpoint so no stage is skipped. */
+  async deleteByDocument(documentId: string): Promise<number> {
+    const rows = await getDb()
+      .delete(pipelineRuns)
+      .where(eq(pipelineRuns.documentId, documentId))
+      .returning({ id: pipelineRuns.id });
+    return rows.length;
+  },
 };

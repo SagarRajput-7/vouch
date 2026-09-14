@@ -30,6 +30,12 @@ export async function requireSession(): Promise<SessionInfo> {
   return info;
 }
 
+export async function requireSessionFor(request: Request): Promise<SessionInfo> {
+  const info = await sessionFromHeaders(request.headers);
+  if (!info) throw unauthorized();
+  return info;
+}
+
 /** Creates an anonymous user and session. Returns the Set-Cookie headers to forward. */
 export async function startGuestSession(): Promise<{ headers: Headers; info: SessionInfo }> {
   await ensureDbReady();
