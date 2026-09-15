@@ -21,6 +21,8 @@ The deployed demo runs in mock mode until an `ANTHROPIC_API_KEY` is configured, 
 
 ## Quickstart
 
+Node 24 or newer is required.
+
 ```bash
 pnpm install
 pnpm dev

@@ -298,3 +298,10 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** `temperature: 0`, which the design spec named as the determinism lever.
 **Reasoning.** Sonnet 5 rejects sampling parameters outright, so a request carrying `temperature: 0` fails with a 400 rather than behaving deterministically. The levers that remain are the ones that matter more anyway: a structured output schema the answer has to satisfy, adaptive thinking, and a system prompt that forbids computing any value that is not printed. Repeatability is then checked where it counts, by grounding every value back to a box on the page.
 **Cut.** Nothing. The spec's intent survives; only the parameter it named is gone.
+
+## 2026-09-15: Node 24 is the floor
+
+**Decision.** CI (`.github/workflows/ci.yml`), Vercel (via `package.json`'s `engines` field) and a runtime guard in `ensurePdfjs` all require Node 24 or newer.
+**Alternatives.** The pdf.js legacy build with polyfills; pinning `pdfjs-dist` to a 5.x release.
+**Reasoning.** The official pdf.js 6 build calls `Promise.try`, which arrived in Node 24, and the platform is entirely ours to pin, so pinning the runtime is smaller and safer than carrying a legacy bundle whose rendering path we have not verified.
+**Cut.** Node 22 support.

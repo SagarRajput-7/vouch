@@ -11,6 +11,14 @@ let ready: Promise<void> | undefined;
  * serve both, so it is made once per process before any document is opened.
  */
 export function ensurePdfjs(): Promise<void> {
+  if (typeof (Promise as { try?: unknown }).try !== "function") {
+    throw new StageError(
+      "runtime_unsupported",
+      "The server runtime is too old to read PDFs.",
+      "Node 24 or newer is required by pdf.js",
+      { retryable: false },
+    );
+  }
   ready ??= Promise.resolve(definePDFJSModule(() => import("pdfjs-dist"))).then(() => undefined);
   return ready;
 }
