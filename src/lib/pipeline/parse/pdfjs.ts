@@ -8,18 +8,14 @@ let ready: Promise<void> | undefined;
 /**
  * unpdf bundles a serverless pdf.js build that extracts text without worker files. Rendering
  * pages to images needs the official build plus a canvas, and unpdf lets one module choice
- * serve both, so it is made once per process before any document is opened.
+ * serve both, so it is made once per process before any document is opened. The legacy build is
+ * loaded rather than the default one: pdf.js 6's default build assumes engine features newer
+ * than Node 24 (`Promise.try`, `Uint8Array.prototype.toHex`), which Vercel's runtime lacks,
+ * while the legacy build carries core-js polyfills for both and is what pdf.js itself
+ * recommends for Node.js environments.
  */
 export function ensurePdfjs(): Promise<void> {
-  if (typeof (Promise as { try?: unknown }).try !== "function") {
-    throw new StageError(
-      "runtime_unsupported",
-      "The server runtime is too old to read PDFs.",
-      "Node 24 or newer is required by pdf.js",
-      { retryable: false },
-    );
-  }
-  ready ??= Promise.resolve(definePDFJSModule(() => import("pdfjs-dist"))).then(() => undefined);
+  ready ??= Promise.resolve(definePDFJSModule(() => import("pdfjs-dist/legacy/build/pdf.mjs"))).then(() => undefined);
   return ready;
 }
 

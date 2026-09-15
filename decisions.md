@@ -299,9 +299,9 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Reasoning.** Sonnet 5 rejects sampling parameters outright, so a request carrying `temperature: 0` fails with a 400 rather than behaving deterministically. The levers that remain are the ones that matter more anyway: a structured output schema the answer has to satisfy, adaptive thinking, and a system prompt that forbids computing any value that is not printed. Repeatability is then checked where it counts, by grounding every value back to a box on the page.
 **Cut.** Nothing. The spec's intent survives; only the parameter it named is gone.
 
-## 2026-09-15: Node 24 is the floor
+## 2026-09-15: pdf.js legacy build under Node, Node 24 floor
 
-**Decision.** CI (`.github/workflows/ci.yml`), Vercel (via `package.json`'s `engines` field) and a runtime guard in `ensurePdfjs` all require Node 24 or newer.
-**Alternatives.** The pdf.js legacy build with polyfills; pinning `pdfjs-dist` to a 5.x release.
-**Reasoning.** The official pdf.js 6 build calls `Promise.try`, which arrived in Node 24, and the platform is entirely ours to pin, so pinning the runtime is smaller and safer than carrying a legacy bundle whose rendering path we have not verified.
+**Decision.** The parse stage loads pdf.js's legacy build (`pdfjs-dist/legacy/build/pdf.mjs`), and CI, Vercel (via `package.json`'s `engines` field) and `.nvmrc` are all on Node 24.
+**Alternatives.** The official build on Node 26 only; pinning `pdfjs-dist` to a 5.x release.
+**Reasoning.** The official 6.x build calls `Promise.try` and `Uint8Array.prototype.toHex`, both of which Node 24 (Vercel's runtime) lacks, while the legacy build carries core-js polyfills for both and is the build pdf.js itself recommends for Node.
 **Cut.** Node 22 support.
