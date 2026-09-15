@@ -37,6 +37,8 @@ describe("GET /api/documents/:id", () => {
     expect(body.invoice?.total).toBe("719.70");
     expect(body.invoice?.fields.total.bbox).toHaveLength(4);
     expect("search" in body.invoice!).toBe(false);
+    expect(typeof body.invoice!.createdAt).toBe("string");
+    expect(body.invoice!.verifiedAt).toBe(null);
     expect(body.lineItems).toHaveLength(3);
     expect(body.issues.map((i) => i.code)).toEqual(["V003"]);
     expect(body.issues[0]).toMatchObject({ severity: "blocking", status: "open", fieldPaths: ["total", "subtotal", "tax"] });

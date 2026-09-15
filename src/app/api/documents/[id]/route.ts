@@ -3,7 +3,7 @@ import { assertSameOrigin } from "@/lib/api/same-origin";
 import { notFound } from "@/lib/api/errors";
 import { requireSessionFor } from "@/lib/auth/session";
 import { getBlobStore } from "@/lib/blob";
-import { summarise, omitSearch, type DocumentDetail } from "@/lib/api/documents";
+import { summarise, toClientInvoice, type DocumentDetail } from "@/lib/api/documents";
 import { auditRepo } from "@/lib/repo/audit";
 import { documentsRepo } from "@/lib/repo/documents";
 import { invoicesRepo } from "@/lib/repo/invoices";
@@ -28,7 +28,7 @@ export const GET = handle<Ctx>(async (request, { params }: Ctx) => {
   ]);
   const body: DocumentDetail = {
     document: await summarise(doc),
-    invoice: stored ? omitSearch(stored.invoice) : null,
+    invoice: stored ? toClientInvoice(stored.invoice) : null,
     lineItems: stored?.lineItems ?? [],
     issues: issues.map((i) => ({ id: i.id, code: i.code, severity: i.severity, fieldPaths: i.fieldPaths, message: i.message, suggestion: i.suggestion, status: i.status, overrideReason: i.overrideReason, createdAt: i.createdAt.toISOString(), resolvedAt: i.resolvedAt?.toISOString() ?? null })),
     pages,

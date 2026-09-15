@@ -41,17 +41,27 @@ export async function listSummaries(workspaceId: string): Promise<DocumentSummar
   return Promise.all(docs.map(summarise));
 }
 
-/** Invoice row without the Postgres-only `search` tsvector column, which clients never need. */
-export function omitSearch(invoice: Invoice): Omit<Invoice, "search"> {
+/**
+ * Invoice row shaped for the client: no Postgres-only `search` tsvector column, and its own
+ * `verifiedAt`/`createdAt`/`updatedAt` timestamps as ISO strings (or null), matching every other
+ * date in this payload rather than the `Date` objects the row decodes to at read time.
+ */
+export type ClientInvoice = Omit<Invoice, "search" | "createdAt" | "updatedAt" | "verifiedAt"> & {
+  createdAt: string;
+  updatedAt: string;
+  verifiedAt: string | null;
+};
+
+export function toClientInvoice(invoice: Invoice): ClientInvoice {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- rest destructure drops `search` on purpose
-  const { search: _search, ...rest } = invoice;
-  return rest;
+  const { search: _search, createdAt, updatedAt, verifiedAt, ...rest } = invoice;
+  return { ...rest, createdAt: createdAt.toISOString(), updatedAt: updatedAt.toISOString(), verifiedAt: verifiedAt?.toISOString() ?? null };
 }
 
 /** JSON shape of `GET /api/documents/:id`, for the review screen. Dates are ISO strings. */
 export type DocumentDetail = {
   document: DocumentSummary;
-  invoice: Omit<Invoice, "search"> | null;
+  invoice: ClientInvoice | null;
   lineItems: LineItem[];
   issues: Array<Pick<Issue, "id" | "code" | "severity" | "fieldPaths" | "message" | "suggestion" | "status" | "overrideReason"> & { createdAt: string; resolvedAt: string | null }>;
   pages: Array<Omit<ParsedPage, "tokens">>;
