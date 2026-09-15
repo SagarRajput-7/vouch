@@ -20,7 +20,7 @@ export const issuesRepo = {
   },
 
   async listByDocument(documentId: string): Promise<Issue[]> {
-    return getDb().select().from(issues).where(eq(issues.documentId, documentId)).orderBy(severityOrder, asc(issues.code), asc(issues.createdAt));
+    return getDb().select().from(issues).where(eq(issues.documentId, documentId)).orderBy(severityOrder, asc(issues.code), asc(issues.createdAt), asc(issues.id));
   },
 
   async listOpenDrafts(documentId: string): Promise<IssueDraft[]> {

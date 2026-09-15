@@ -4,12 +4,21 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LocalTime } from "@/components/ui-bits/local-time";
 import type { DocumentSummary } from "@/lib/api/documents";
+import { cn } from "@/lib/utils";
 import { StatusChip } from "./status-chip";
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * The daily model budget parks a document rather than failing it, so it carries a failure message
+ * while still queued. That is a wait, not a problem with the file, and it must not read like one.
+ */
+function paused(d: DocumentSummary): boolean {
+  return d.status === "queued" && d.failureCode === "budget_paused";
 }
 
 type Props = {
@@ -39,7 +48,11 @@ export function DocumentList({ documents, onRetry, onDelete }: Props) {
               <tr key={d.id} className="border-t border-border">
                 <td className="px-4 py-3">
                   <span className="font-medium hover:underline">{d.filename}</span>
-                  {d.failureMessage ? <p className="mt-1 text-xs text-danger">{d.failureMessage}</p> : null}
+                  {d.failureMessage ? (
+                    <p className={cn("mt-1 text-xs", paused(d) ? "text-muted-foreground" : "text-danger")}>
+                      {paused(d) ? "Paused: daily model budget reached. Resumes tomorrow." : d.failureMessage}
+                    </p>
+                  ) : null}
                 </td>
                 <td className="px-4 py-3"><StatusChip status={d.status} /></td>
                 <td className="px-4 py-3 font-mono text-xs tabular">{formatBytes(d.byteSize)}</td>

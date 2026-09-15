@@ -45,6 +45,15 @@ describe("validateInvoice", () => {
     const issues = validateInvoice(ctx(e));
     expect(issues.filter((i) => i.code === "V001").map((i) => i.fieldPaths)).toEqual([["currency"], ["total"]]);
     expect(issues[0].severity).toBe("blocking");
+    expect(issues.find((i) => i.fieldPaths[0] === "total")?.message).toBe("Total is missing or could not be read.");
+  });
+
+  it("V001 quotes the printed text when a value was read but could not be parsed", () => {
+    const e = sample("clean-digital");
+    // The model saw a date and reported it; only its own ISO value is unusable.
+    e.fields.issueDate = { value: "2026/13/01", sourceText: "13/01/2026", page: 1, confidence: 0.4 };
+    const issues = validateInvoice(ctx(e)).filter((i) => i.code === "V001");
+    expect(issues.map((i) => i.message)).toEqual(["Issue date could not be read as a date (printed as 2026/13/01)."]);
   });
 
   it("V003 catches the mismatch sample and suggests the transposed total", () => {
