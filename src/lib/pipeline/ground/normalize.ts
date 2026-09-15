@@ -1,5 +1,5 @@
 import { isIsoDate, parseDate } from "@/lib/normalize/dates";
-import { parseMoney } from "@/lib/normalize/money";
+import { parseDecimal, parseMoney } from "@/lib/normalize/money";
 
 export type CandidateKind = "text" | "money" | "number" | "date" | "currency";
 
@@ -76,6 +76,23 @@ export function fuzzyKey(s: string): string {
   return s.toLowerCase().replace(CURRENCY_CODE_WORDS, "").replace(/\s/g, "").replace(CURRENCY_MARKS, "");
 }
 
+const isoOf = (s: string): string | null => (isIsoDate(s) ? s : parseDate(s));
+
+/**
+ * True when the model's source text is the same value it claims. A source text reading as a
+ * different amount or a different day is not evidence for the value: searching for it would
+ * report a value the page does not carry as located, at full confidence, on someone else's
+ * number. Text and currency are compared by nobody, because case, punctuation and word order
+ * legitimately differ between what is printed and what the model returns.
+ */
+function sourceTextAgrees(kind: CandidateKind, value: string | null, sourceText: string | null): boolean {
+  if (!value?.trim() || !sourceText?.trim()) return true;
+  if (kind === "money") return parseMoney(sourceText) === parseMoney(value);
+  if (kind === "number") return parseDecimal(sourceText, 4) === parseDecimal(value, 4);
+  if (kind === "date") return isoOf(sourceText) === isoOf(value);
+  return true;
+}
+
 /** The strings worth searching for: the model's source text first, then its value. */
 export function candidatesFor(kind: CandidateKind, scalar: { value: string | null; sourceText: string | null }): Candidate[] {
   const out: Candidate[] = [];
@@ -87,7 +104,8 @@ export function candidatesFor(kind: CandidateKind, scalar: { value: string | nul
     const iso = kind === "date" ? (isIsoDate(raw) ? raw : (parseDate(raw) ?? undefined)) : undefined;
     out.push({ raw, norm: normalizeWords(raw), key: fuzzyKey(raw), words: raw.split(" ").length, money, iso });
   };
-  add(scalar.sourceText);
+  // A source text that disagrees with the value is dropped, and the value stands on its own.
+  if (sourceTextAgrees(kind, scalar.value, scalar.sourceText)) add(scalar.sourceText);
   add(scalar.value);
   return out;
 }

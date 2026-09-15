@@ -87,6 +87,13 @@ describe("groundValue", () => {
     expect(groundValue(candidatesFor("date", { value: "2026-08-03", sourceText: null }), [page], base)).toMatchObject({ matchedText: "3 August 2026" });
   });
 
+  it("will not lend a claimed value the highlight of different printed text", () => {
+    const page = makePage(1, ["Amount payable 719.70"]);
+    // The model transposed two digits; 791.70 is nowhere on this page, source text or not.
+    expect(groundValue(money("791.70", "719.70"), [page], base)).toBeNull();
+    expect(groundValue(money("719.70", "719.70"), [page], base)).toMatchObject({ groundingMethod: "exact", matchedText: "719.70" });
+  });
+
   it("matches multi-token windows and unions their boxes", () => {
     const page = makePage(1, ["Amount due USD 1,764.48 today"]);
     const g = groundValue(money("1764.48", "USD 1,764.48"), [page], base)!;

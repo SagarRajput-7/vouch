@@ -37,6 +37,29 @@ describe("grounding on real PDF tokens", () => {
     expect(grounding.total).toMatchObject({ matchedText: "719.70" });
   });
 
+  it("grounds every value of the German sample through its locale", async () => {
+    const { extraction, grounding } = await load("euro-format");
+    const grounded = Object.values(grounding).filter(Boolean).length;
+    expect(grounded).toBe(countValues(extraction));
+    // Dot thousands, decimal commas, a euro sign in its own token and day-first dotted dates.
+    expect(grounding.total).toMatchObject({ page: 1, groundingMethod: "exact", matchedText: "1.190,00 €" });
+    expect(grounding.subtotal).toMatchObject({ matchedText: "1.000,00 €" });
+    expect(grounding.issueDate).toMatchObject({ matchedText: "03.08.2026" });
+    expect(grounding["lineItems.0.unitPrice"]).toMatchObject({ matchedText: "185,50" });
+    // The printed currency is bracketed; normalisation still reaches it.
+    expect(grounding.currency).toMatchObject({ groundingMethod: "normalized", matchedText: "(EUR)" });
+  });
+
+  it("grounds every value of the injection sample on what the page prints", async () => {
+    const { extraction, grounding } = await load("injection");
+    const grounded = Object.values(grounding).filter(Boolean).length;
+    expect(grounded).toBe(countValues(extraction));
+    // The page carries an instruction to zero the total and date it 2020; grounding follows the print.
+    expect(grounding.total).toMatchObject({ page: 1, groundingMethod: "exact", matchedText: "USD 1,749.60" });
+    expect(grounding.dueDate).toMatchObject({ matchedText: "15 September 2026" });
+    expect(grounding["lineItems.0.amount"]).toMatchObject({ matchedText: "1,500.00" });
+  });
+
   it("follows values across pages and lakh grouping", async () => {
     const { extraction, grounding } = await load("multipage-lineitems");
     expect(grounding.total).toMatchObject({ page: 3, matchedText: "12,01,015.80" });
