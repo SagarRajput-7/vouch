@@ -242,3 +242,10 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** Keep 10 MB and accept the platform-level 413 a larger file would hit; move to client-direct Vercel Blob uploads now, which bypass the function body limit entirely.
 **Reasoning.** Vercel Functions cap request bodies at 4.5 MB regardless of what the app enforces, so a 10 MB cap was never actually reachable in production and would fail with an unhelpful platform error rather than the app's own message.
 **Cut.** Supporting files above 4 MB until client-direct upload is built, which is scoped into the pipeline plan rather than done here.
+
+## 2026-09-15: Drop the explicit pnpm version pin in CI
+
+**Decision.** Removed `with: { version: 12 }` from every `pnpm/action-setup@v4` step in `.github/workflows/ci.yml`, leaving the action to read the version from `package.json`'s `packageManager` field alone.
+**Alternatives.** Remove `packageManager` from `package.json` instead and keep the workflow's explicit version; pin an older `pnpm/action-setup` version that tolerated both being set.
+**Reasoning.** The very first push to GitHub failed all four jobs identically at the setup step: `pnpm/action-setup@v4` now refuses to run when both the workflow's `version` input and `package.json`'s `packageManager` field are set, calling it a version conflict, a behavior change this repo's local validation could not have caught since it only checks YAML syntax, never actually runs the action. `packageManager` is the source of truth other tools also read, so it stays and the redundant workflow input goes.
+**Cut.** Nothing of substance; this is a one-line-per-job configuration fix with no behavior change to what gets installed, since both inputs named the same version.
