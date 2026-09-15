@@ -38,10 +38,13 @@ function splitDecimal(input: string): DecimalParts | null {
     fraction = s.slice(idx + 1);
   } else if (lastComma >= 0 || lastDot >= 0) {
     const idx = lastComma >= 0 ? lastComma : lastDot;
+    const before = s.slice(0, idx);
     const after = s.slice(idx + 1);
     // A single separator followed by exactly three digits reads as a thousands
-    // group ("1,234" -> 1234), not a decimal point ("12,34" -> 12.34).
-    const isThousands = after.length === 3;
+    // group ("1,234" -> 1234), not a decimal point ("12,34" -> 12.34). An integer part
+    // starting with a zero is the exception: no locale writes 125 as "0,125" or "00.125",
+    // so the three-digit run there is a fraction and "0.125" stays 0.125.
+    const isThousands = after.length === 3 && !before.startsWith("0");
     if (isThousands) {
       integer = s;
       fraction = "";

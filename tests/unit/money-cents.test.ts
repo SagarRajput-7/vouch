@@ -29,4 +29,11 @@ describe("parseDecimal", () => {
     expect(parseDecimal("(2.5)")).toBe("-2.5000");
     expect(parseDecimal("each")).toBeNull();
   });
+  it("reads a three-digit run under a zero integer part as a fraction, not a thousands group", () => {
+    // A metered unit price of 0.125 is common; 125 printed as "0.125" is not.
+    expect(parseDecimal("0.125")).toBe("0.1250");
+    expect(parseDecimal("0,125")).toBe("0.1250");
+    expect(parseDecimal("00.125")).toBe("0.1250");
+    expect(parseDecimal("1.500")).toBe("1500.0000");
+  });
 });
