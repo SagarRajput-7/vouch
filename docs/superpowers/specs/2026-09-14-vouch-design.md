@@ -200,7 +200,7 @@ Blocking issues must be resolved by a correction or explicitly overridden with a
 | Threat | Control |
 |---|---|
 | Cross-tenant access | workspace-scoped repository layer, ids never trusted from the client, isolation test |
-| Malicious files | magic-byte type detection, 10 MB and 10 page caps, pdfjs with scripting and XFA disabled under a timeout, images re-encoded to strip metadata, filenames never used as paths, private blob store served only through an authenticated route handler that streams bytes |
+| Malicious files | magic-byte type detection, 4 MB and 10 page caps, pdfjs with scripting and XFA disabled under a timeout, images re-encoded to strip metadata, filenames never used as paths, private blob store served only through an authenticated route handler that streams bytes |
 | Prompt injection via document text | content framed as data in the prompt, schema validation of output, grounding requirement, red-team fixture in tests |
 | XSS from document-derived strings | React escaping, no `dangerouslySetInnerHTML`, nonce-based CSP with no inline scripts |
 | CSRF | same-origin check on every mutating route via `Sec-Fetch-Site` and `Origin`, SameSite cookies |
@@ -289,7 +289,7 @@ Derived from Zamp's marketing site and product app: Geist and Geist Mono, near-b
 
 | Limit | Value | Behaviour when hit |
 |---|---|---|
-| File size | 10 MB | rejected with message |
+| File size | 4 MB | rejected with message |
 | Pages per document | 10, OCR on at most 5 | rejected or OCR limited with notice |
 | Documents per guest workspace | 25 | upload blocked with message |
 | Files per upload request | 5 | rejected |
