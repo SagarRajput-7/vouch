@@ -9,7 +9,7 @@ describe("costMicros", () => {
   });
   it("adds every token class", () => {
     const micros = costMicros({ model: "claude-sonnet-5", inputTokens: 1000, outputTokens: 500, cacheWriteTokens: 2000, cacheReadTokens: 10_000, latencyMs: 0, costMicros: 0 });
-    expect(micros).toBe(Math.round(1000 * 2 + 500 * 10 + 2000 * 2.5 + 10_000 * 0.2));
+    expect(micros).toBe(14_000);
   });
   it("is zero for the mock model", () => {
     expect(costMicros({ model: "mock", inputTokens: 5, outputTokens: 5, cacheWriteTokens: 0, cacheReadTokens: 0, latencyMs: 0, costMicros: 0 })).toBe(0);

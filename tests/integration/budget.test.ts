@@ -67,6 +67,7 @@ describe("runner guard rails", () => {
     const extractRun = runs.find((r) => r.stage === "extract");
     expect(extractRun?.status).toBe("skipped");
     expect(extractRun?.meta).toEqual({ reason: "budget_paused" });
+    expect(await claimJobs({ runnerId: "t2", limit: 1, perWorkspace: 5, global: 5 })).toEqual([]);
   });
 
   it("marks a non-retryable stage error dead on the first attempt with its plain message", async () => {

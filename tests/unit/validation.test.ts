@@ -176,6 +176,12 @@ describe("validateInvoice", () => {
     expect(issues[0].message).toContain("page 1");
   });
 
+  it("V012 raises nothing for an OCR page with no measured confidence", () => {
+    const pages: ParsedPage[] = [{ ...textPage, textSource: "ocr", ocrMeanConfidence: null }];
+    const issues = validateInvoice(ctx(sample("clean-digital"), { pages }));
+    expect(issues.filter((i) => i.code === "V012")).toHaveLength(0);
+  });
+
   it("orders blocking before warning before info", () => {
     const e = sample("mismatch-total");
     e.fields.dueDate = { value: "2026-07-01", sourceText: null, page: 1, confidence: 0.9 };

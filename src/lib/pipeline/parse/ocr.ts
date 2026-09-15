@@ -6,6 +6,10 @@ import { assignLines, type RawToken } from "./lines";
 
 export type OcrResult = { tokens: PositionedToken[]; meanConfidence: number };
 
+function clamp01(n: number): number {
+  return Math.min(1, Math.max(0, n));
+}
+
 type Bbox = { x0: number; y0: number; x1: number; y1: number };
 type Word = { text: string; confidence: number; bbox: Bbox };
 export type OcrBlock = { paragraphs: Array<{ lines: Array<{ words: Word[] }> }> };
@@ -32,12 +36,16 @@ export function tokensFromBlocks(blocks: OcrBlock[], size: { width: number; heig
         for (const word of line.words) {
           const text = word.text.trim();
           if (!text) continue;
+          // Clamp the extents, not the width and height, the same way pdf-text.ts does:
+          // clamping a width independently could leave a box whose x + w runs past the image edge.
+          const x = clamp01(word.bbox.x0 / size.width);
+          const y = clamp01(word.bbox.y0 / size.height);
           raw.push({
             text,
-            x: word.bbox.x0 / size.width,
-            y: word.bbox.y0 / size.height,
-            w: (word.bbox.x1 - word.bbox.x0) / size.width,
-            h: (word.bbox.y1 - word.bbox.y0) / size.height,
+            x,
+            y,
+            w: clamp01(word.bbox.x1 / size.width) - x,
+            h: clamp01(word.bbox.y1 / size.height) - y,
           });
           confidences.push(word.confidence / 100);
         }

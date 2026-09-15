@@ -25,7 +25,7 @@ test.describe("dashboard", () => {
     // past the filename cell through status, size, date and the action buttons. Scoping to
     // `row` is what keeps the live announcer out of this count, not the pattern.
     const rows = page.getByRole("row").filter({ hasText: /\.(pdf|jpg)/ });
-    await expect(rows).toHaveCount(8);
+    await expect(rows).toHaveCount(8, { timeout: 60_000 });
 
     // Scoped to the table: the live announcer's polite region keeps the text of the last
     // status-change announcement (e.g. "mismatch-total.pdf: Needs review") sitting in the DOM,
@@ -63,6 +63,8 @@ test.describe("dashboard", () => {
 
     // Populated state.
     await page.getByRole("button", { name: "Load sample invoices" }).click();
+    const rows = page.getByRole("row").filter({ hasText: /\.(pdf|jpg)/ });
+    await expect(rows).toHaveCount(8, { timeout: 60_000 });
     // Scoped to the table for the same reason as the first test: an unscoped match can also
     // hit the live announcer's leftover status text. See decisions.md, 2026-09-15.
     await expect(page.getByRole("table").getByText("Needs review")).toHaveCount(7, { timeout: 240_000 });

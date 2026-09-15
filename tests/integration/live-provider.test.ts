@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { LiveModelProvider, type MessagesClient } from "@/lib/pipeline/extract/live-provider";
 import { StageError } from "@/lib/pipeline/errors";
+import { LiveModelProvider, type MessagesClient } from "@/lib/pipeline/extract/live-provider";
+import { SYSTEM_PROMPT } from "@/lib/pipeline/extract/prompt";
 
 const pdfBytes = new TextEncoder().encode("%PDF-1.4 fake");
 
@@ -48,12 +49,23 @@ describe("LiveModelProvider", () => {
     expect(out.usage.cacheWriteTokens).toBe(800);
     expect(out.usage.costMicros).toBe(Math.round(1200 * 2 + 300 * 10 + 800 * 2.5));
     expect(out.promptVersion).toBe("live-1");
-    const params = client.calls[0] as { model: string; system: Array<{ cache_control?: unknown }>; messages: Array<{ content: Array<{ type: string; source?: { media_type: string } }> }>; output_config: { effort: string } };
+    const params = client.calls[0] as {
+      model: string;
+      max_tokens: number;
+      thinking: unknown;
+      system: Array<{ text: string; cache_control?: unknown }>;
+      messages: Array<{ content: Array<{ type: string; source?: { media_type: string } }> }>;
+      output_config: { effort: string; format: unknown };
+    };
     expect(params.model).toBe("claude-sonnet-5");
+    expect(params.max_tokens).toBe(16_000);
+    expect(params.thinking).toEqual({ type: "adaptive" });
     expect(params.system[0].cache_control).toEqual({ type: "ephemeral" });
+    expect(params.system[0].text).toBe(SYSTEM_PROMPT);
     expect(params.messages[0].content[0].type).toBe("document");
     expect(params.messages[0].content[0].source?.media_type).toBe("application/pdf");
     expect(params.output_config.effort).toBe("medium");
+    expect(params.output_config.format).toBeDefined();
     expect("temperature" in params).toBe(false);
   });
 
@@ -70,6 +82,14 @@ describe("LiveModelProvider", () => {
   it("treats a truncated response as a retryable stage error", async () => {
     const client = fakeClient({ parsed_output: null, stop_reason: "max_tokens", usage, model: "claude-sonnet-5" });
     await expect(new LiveModelProvider(client).extract({ bytes: pdfBytes, mime: "application/pdf", sha256: "abc", filename: "a.pdf" })).rejects.toMatchObject({ code: "model_truncated" });
+  });
+
+  it("treats a well-formed but schema-invalid response as a retryable stage error", async () => {
+    const client = fakeClient({ parsed_output: { bogus: true }, stop_reason: "end_turn", usage, model: "claude-sonnet-5" });
+    const err = await new LiveModelProvider(client).extract({ bytes: pdfBytes, mime: "application/pdf", sha256: "abc", filename: "a.pdf" }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(StageError);
+    expect((err as StageError).code).toBe("model_invalid_output");
+    expect((err as StageError).retryable).toBe(true);
   });
 
   it("treats a refusal as a non-retryable stage error with a plain message", async () => {

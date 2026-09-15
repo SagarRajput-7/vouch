@@ -15,6 +15,13 @@ describe("fieldMetaFrom", () => {
     expect(fieldMetaFrom("total", { value: "1764.48", sourceText: null, page: 1, confidence: 0.95 }, null, { blocking: 0, warning: 0 }).risk).toBeGreaterThanOrEqual(0.5);
     expect(fieldMetaFrom("total", { value: "1764.48", sourceText: null, page: 1, confidence: 0.95 }, g, { blocking: 1, warning: 0 }).risk).toBeGreaterThanOrEqual(0.5);
   });
+  it("scores a missing total as high risk and a missing issue date as only medium", () => {
+    const missing = { value: null, sourceText: null, page: null, confidence: 0.9 };
+    expect(fieldMetaFrom("total", missing, null, { blocking: 1, warning: 0 }).risk).toBeGreaterThanOrEqual(0.5);
+    const dateRisk = fieldMetaFrom("issueDate", missing, null, { blocking: 1, warning: 0 }).risk;
+    expect(dateRisk).toBeGreaterThanOrEqual(0.2);
+    expect(dateRisk).toBeLessThan(0.5);
+  });
   it("treats an absent optional value as nothing to locate", () => {
     const meta = fieldMetaFrom("shipping", { value: null, sourceText: null, page: null, confidence: 0.9 }, null, { blocking: 0, warning: 0 });
     expect(meta.groundingMethod).toBe("none");

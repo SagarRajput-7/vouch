@@ -18,9 +18,24 @@ describe("tokensFromBlocks", () => {
     ];
     const out = tokensFromBlocks(blocks, { width: 1000, height: 2000 });
     expect(out.tokens).toHaveLength(2);
-    expect(out.tokens[0]).toEqual({ text: "Total", x: 0.1, y: 0.1, w: 0.06, h: 0.01, line: 0 });
+    // w and h are each a clamp01 subtracted from another (see tokensFromBlocks), which can land a
+    // float epsilon away from the clean quotient, so they are compared with tolerance below.
+    expect(out.tokens[0]).toMatchObject({ text: "Total", x: 0.1, y: 0.1, line: 0 });
+    expect(out.tokens[0].w).toBeCloseTo(0.06, 9);
+    expect(out.tokens[0].h).toBeCloseTo(0.01, 9);
     expect(out.tokens[1].line).toBe(0);
     expect(out.meanConfidence).toBeCloseTo(0.8, 5);
+  });
+
+  it("clamps a box whose right edge exceeds the image width", () => {
+    const blocks = [
+      { paragraphs: [{ lines: [{ words: [
+        { text: "Overflow", confidence: 80, bbox: { x0: 950, y0: 200, x1: 1100, y1: 220 } },
+      ] }] }] },
+    ];
+    const out = tokensFromBlocks(blocks, { width: 1000, height: 2000 });
+    const [token] = out.tokens;
+    expect(token.x + token.w).toBe(1);
   });
 });
 
