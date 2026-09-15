@@ -4,7 +4,7 @@ import { env } from "@/lib/env";
 import { StageError } from "@/lib/pipeline/errors";
 import type { ExtractOptions, ModelInput, ModelProvider, ModelUsage } from "@/lib/pipeline/types";
 import { costMicros } from "./cost";
-import { buildUserText, SYSTEM_PROMPT } from "./prompt";
+import { buildUserText, PROMPT_VERSION, SYSTEM_PROMPT } from "./prompt";
 import { extractionResultSchema, type ExtractionResult } from "./schema";
 
 /** The slice of the SDK we call, narrow enough to fake in tests. */
@@ -23,7 +23,7 @@ const MAX_TOKENS = 16_000;
 const TIMEOUT_MS = 90_000;
 
 function defaultClient(): MessagesClient {
-  if (!env.ANTHROPIC_API_KEY) throw new StageError("model_auth", "Model credentials are not configured.");
+  if (!env.ANTHROPIC_API_KEY) throw new StageError("model_auth", "Model credentials are not configured.", undefined, { retryable: false });
   return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, timeout: TIMEOUT_MS, maxRetries: 2 }) as unknown as MessagesClient;
 }
 
@@ -71,16 +71,16 @@ export class LiveModelProvider implements ModelProvider {
     usage.costMicros = costMicros(usage);
 
     if (response.stop_reason === "refusal") {
-      throw new StageError("model_refused", "The model declined to process this document.", `refusal: ${response.stop_details?.category ?? "unknown"}`, { retryable: false });
+      throw new StageError("model_refused", "The model declined to process this document.", `refusal: ${response.stop_details?.category ?? "unknown"}`, { retryable: false, usage });
     }
     if (response.stop_reason === "max_tokens" || response.parsed_output == null) {
-      throw new StageError("model_truncated", "The model's answer was cut short. Try again.", `stop_reason=${response.stop_reason}`);
+      throw new StageError("model_truncated", "The model's answer was cut short. Try again.", `stop_reason=${response.stop_reason}`, { retryable: true, usage });
     }
     const parsed = extractionResultSchema.safeParse(response.parsed_output);
     if (!parsed.success) {
-      throw new StageError("model_invalid_output", "The model returned an unexpected shape. Try again.", parsed.error.message);
+      throw new StageError("model_invalid_output", "The model returned an unexpected shape. Try again.", parsed.error.message, { retryable: true, usage });
     }
     const result: ExtractionResult = parsed.data;
-    return { result, usage, raw: { stopReason: response.stop_reason, promptFocus: options?.focus ?? null } };
+    return { result, usage, raw: { stopReason: response.stop_reason, promptFocus: options?.focus ?? null }, promptVersion: PROMPT_VERSION };
   }
 }

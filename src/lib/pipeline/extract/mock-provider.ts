@@ -6,6 +6,8 @@ import { extractionResultSchema, fieldNames, type ExtractionResult } from "./sch
 
 export type GroundTruthLookup = (sha256: string) => Promise<GroundTruth | null>;
 
+export const MOCK_PROMPT_VERSION = "mock-1";
+
 const SAMPLES_DIR = path.join(process.cwd(), "samples");
 
 /** Default lookup: samples/manifest.json maps sha256 to a ground-truth file. */
@@ -83,6 +85,6 @@ export class MockModelProvider implements ModelProvider {
       latencyMs: Date.now() - started,
       costMicros: 0,
     };
-    return { result, usage, raw: { source: gt ? "ground-truth" : "unknown", sha256: input.sha256 } };
+    return { result, usage, raw: { source: gt ? "ground-truth" : "unknown", sha256: input.sha256 }, promptVersion: MOCK_PROMPT_VERSION };
   }
 }

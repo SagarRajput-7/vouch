@@ -47,6 +47,7 @@ describe("LiveModelProvider", () => {
     expect(out.usage.model).toBe("claude-sonnet-5");
     expect(out.usage.cacheWriteTokens).toBe(800);
     expect(out.usage.costMicros).toBe(Math.round(1200 * 2 + 300 * 10 + 800 * 2.5));
+    expect(out.promptVersion).toBe("live-1");
     const params = client.calls[0] as { model: string; system: Array<{ cache_control?: unknown }>; messages: Array<{ content: Array<{ type: string; source?: { media_type: string } }> }>; output_config: { effort: string } };
     expect(params.model).toBe("claude-sonnet-5");
     expect(params.system[0].cache_control).toEqual({ type: "ephemeral" });
@@ -78,6 +79,7 @@ describe("LiveModelProvider", () => {
     expect((err as StageError).code).toBe("model_refused");
     expect((err as StageError).retryable).toBe(false);
     expect((err as StageError).userMessage).not.toContain("undefined");
+    expect((err as StageError).usage?.costMicros).toBe(Math.round(1200 * 2 + 300 * 10 + 800 * 2.5));
   });
 
   it("keeps truncation retryable", async () => {

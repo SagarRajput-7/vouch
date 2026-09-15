@@ -19,7 +19,7 @@ export type ExtractOptions = { focus?: { fieldPaths: string[]; reason: string } 
 
 export interface ModelProvider {
   readonly name: string;
-  extract(input: ModelInput, options?: ExtractOptions): Promise<{ result: ExtractionResult; usage: ModelUsage; raw: unknown }>;
+  extract(input: ModelInput, options?: ExtractOptions): Promise<{ result: ExtractionResult; usage: ModelUsage; raw: unknown; promptVersion: string }>;
 }
 
 export type StageName = "parse" | "extract" | "ground" | "validate" | "reconcile" | "finalise";

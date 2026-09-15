@@ -79,4 +79,21 @@ describe("runner guard rails", () => {
     expect(after?.failureCode).toBe("model_refused");
     expect(after?.failureMessage).toBe("The model declined to process this document.");
   });
+
+  it("records usage carried on a StageError before the job is retried", async () => {
+    const { claimed } = await seed("truncated");
+    setModelProviderForTests({
+      name: "live",
+      extract: async () => {
+        throw new StageError("model_truncated", "The model's answer was cut short. Try again.", undefined, {
+          usage: { model: "claude-sonnet-5", inputTokens: 1000, outputTokens: 10, cacheWriteTokens: 0, cacheReadTokens: 0, latencyMs: 5, costMicros: 2100 },
+        });
+      },
+    });
+    await runJob(claimed);
+    expect(await usageRepo.dailyTotalMicros()).toBe(2100);
+    const job = await jobsRepo.getById(claimed.id);
+    expect(job?.attempts).toBe(1);
+    expect(job?.status).toBe("queued");
+  });
 });
