@@ -1,13 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { candidatesFor, fuzzyKey, normalizeText, normalizeWords } from "@/lib/pipeline/ground/normalize";
+import { candidatesFor, fuzzyKey, isMoneyShaped, normalizeText, normalizeWords } from "@/lib/pipeline/ground/normalize";
 
 describe("normalizeText", () => {
-  it("canonicalises numbers in any grouping", () => {
+  it("canonicalises amounts in any grouping, and leaves bare numbers alone", () => {
     expect(normalizeText("1,630.00")).toBe("1630.00");
     expect(normalizeText("1.190,00")).toBe("1190.00");
     expect(normalizeText("10,17,810.00")).toBe("1017810.00");
     expect(normalizeText("$1,764.48")).toBe("1764.48");
-    expect(normalizeText("12")).toBe("12.00");
+    expect(normalizeText("12")).toBe("12");
+  });
+  it("only treats a number as money when it is printed as an amount", () => {
+    expect(isMoneyShaped("1,630.00")).toBe(true);
+    expect(isMoneyShaped("2,160")).toBe(true);
+    expect(isMoneyShaped("$1764")).toBe(true);
+    expect(isMoneyShaped("2026")).toBe(false);
+    expect(isMoneyShaped("4471")).toBe(false);
+    expect(isMoneyShaped("5%")).toBe(false);
+    expect(isMoneyShaped("Total")).toBe(false);
+    // A year, a reference number and a day of the month keep their own digits.
+    expect(normalizeText("2026")).toBe("2026");
+    expect(normalizeText("4471")).toBe("4471");
+    expect(normalizeText("5%")).toBe("5");
   });
   it("lowercases text, drops punctuation and currency symbols, keeps letters and digits", () => {
     expect(normalizeText("Inc.")).toBe("inc");
@@ -18,7 +31,7 @@ describe("normalizeText", () => {
   });
   it("normalizeWords joins normalised words with single spaces", () => {
     expect(normalizeWords("USD  1,764.48")).toBe("usd 1764.48");
-    expect(normalizeWords("Aug 3, 2026")).toBe("aug 3.00 2026.00");
+    expect(normalizeWords("Aug 3, 2026")).toBe("aug 3 2026");
   });
   it("fuzzyKey strips whitespace and currency marks only", () => {
     expect(fuzzyKey("USD 1,764.48")).toBe("1,764.48");

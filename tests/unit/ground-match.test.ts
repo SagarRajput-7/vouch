@@ -3,7 +3,7 @@ import type { PositionedToken } from "@/lib/db/schema";
 import { groundExtraction } from "@/lib/pipeline/ground/extraction";
 import { groundValue } from "@/lib/pipeline/ground/match";
 import { candidatesFor } from "@/lib/pipeline/ground/normalize";
-import type { ExtractionResult } from "@/lib/pipeline/extract/schema";
+import { fieldNames, type ExtractionResult } from "@/lib/pipeline/extract/schema";
 import type { ParsedPage } from "@/lib/pipeline/types";
 
 /** One token per whitespace-separated word; x by word index, y by line index. */
@@ -65,6 +65,20 @@ describe("groundValue", () => {
     const page = makePage(1, ["Total 500.00"]);
     expect(groundValue(money("123.45"), [page], base)).toBeNull();
     expect(groundValue(text("Completely different vendor"), [page], base)).toBeNull();
+  });
+
+  it("refuses to confirm an amount that is not printed as one", () => {
+    const page = makePage(1, ["PO 4471 Invoice date: 3 August 2026", "Total 1,764.48", "VAT 5% 134.48"]);
+    // A year, a purchase-order number and a day of the month are not amounts, whatever they total to.
+    expect(groundValue(money("4471.00"), [page], base)).toBeNull();
+    expect(groundValue(money("2026.00"), [page], base)).toBeNull();
+    expect(groundValue(money("3.00"), [page], base)).toBeNull();
+    // Nor is a tax rate the tax.
+    expect(groundValue(money("5.00"), [page], base)).toBeNull();
+    // The amounts that are printed still ground.
+    expect(groundValue(money("1764.48"), [page], base)).toMatchObject({ groundingMethod: "normalized", matchedText: "1,764.48" });
+    expect(groundValue(money("134.48"), [page], base)).toMatchObject({ groundingMethod: "exact", matchedText: "134.48" });
+    expect(groundValue(candidatesFor("date", { value: "2026-08-03", sourceText: null }), [page], base)).toMatchObject({ matchedText: "3 August 2026" });
   });
 
   it("matches multi-token windows and unions their boxes", () => {
@@ -137,5 +151,42 @@ describe("groundExtraction", () => {
     expect(g["lineItems.1.unitPrice"]).toMatchObject({ line: 3, range: [17, 18] });
     expect(g["lineItems.1.amount"]).toMatchObject({ line: 3, range: [18, 19] });
     expect(Object.keys(g)).toHaveLength(10 + 2 * 4);
+  });
+
+  const none = () => ({ value: null, sourceText: null, page: null, confidence: 0.9 });
+  const extractionOf = (fields: Partial<ExtractionResult["fields"]>, lineItems: ExtractionResult["lineItems"] = []): ExtractionResult => ({
+    docType: { value: "invoice", confidence: 0.9, reason: "" },
+    fields: { ...(Object.fromEntries(fieldNames.map((f) => [f, none()])) as ExtractionResult["fields"]), ...fields },
+    lineItems,
+    notes: null,
+  });
+
+  it("does not let two header fields with the same amount claim the same tokens", () => {
+    const twoRows = makePage(1, ["Total 45.00", "Item A 45.00"]);
+    const g = groundExtraction(extractionOf({ total: scalar("45.00"), subtotal: scalar("45.00") }), [twoRows]);
+    // The labelled field takes the amount beside its label; the unlabelled one cannot take it too.
+    expect(g.total).toMatchObject({ line: 0, range: [1, 2] });
+    expect(g.subtotal).toMatchObject({ line: 1, range: [4, 5] });
+    expect(g.total!.range).not.toEqual(g.subtotal!.range);
+  });
+
+  const unfoundRow = [{ description: scalar("Gadget"), quantity: scalar("1"), unitPrice: scalar("45.00"), amount: scalar("45.00") }];
+
+  it("keeps a row's cells together when the description cannot be found", () => {
+    // The footer's "1" sits further left than the row's, so a bare column hint would take it.
+    const withFooter = makePage(1, ["Widget item 1 45.00 45.00", "Page 1 of 3"]);
+    const g = groundExtraction(extractionOf({}, unfoundRow), [withFooter]);
+    expect(g["lineItems.0.description"]).toBeNull();
+    expect(g["lineItems.0.amount"]).toMatchObject({ line: 0, range: [4, 5] });
+    expect(g["lineItems.0.unitPrice"]).toMatchObject({ line: 0, range: [3, 4] });
+    expect(g["lineItems.0.quantity"]).toMatchObject({ line: 0, range: [2, 3] });
+  });
+
+  it("leaves a quantity ungrounded when nothing in its row could be found", () => {
+    const footerOnly = makePage(1, ["Page 1 of 3"]);
+    const g = groundExtraction(extractionOf({}, unfoundRow), [footerOnly]);
+    expect(g["lineItems.0.amount"]).toBeNull();
+    expect(g["lineItems.0.unitPrice"]).toBeNull();
+    expect(g["lineItems.0.quantity"]).toBeNull();
   });
 });

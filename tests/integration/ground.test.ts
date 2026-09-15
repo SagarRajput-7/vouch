@@ -44,6 +44,6 @@ describe("grounding on real PDF tokens", () => {
     expect(grounding["lineItems.12.description"]!.page).toBe(2);
     expect(grounding["lineItems.21.amount"]).toMatchObject({ page: 3, matchedText: "1,44,000.00" });
     const grounded = Object.values(grounding).filter(Boolean).length;
-    expect(grounded).toBeGreaterThanOrEqual(countValues(extraction) - 2);
+    expect(grounded).toBe(countValues(extraction));
   });
 });
