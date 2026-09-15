@@ -60,3 +60,40 @@ export function parseMoney(input: string): string | null {
   const out = `${str.slice(0, -2)}.${str.slice(-2)}`;
   return negative && value !== BigInt(0) ? `-${out}` : out;
 }
+
+const HUNDRED = BigInt(100);
+const ZERO = BigInt(0);
+
+/** Canonical "1234.56" to integer cents. Throws on anything not canonical; parse first. */
+export function toCents(canonical: string): bigint {
+  const m = /^(-?)(\d+)\.(\d{2})$/.exec(canonical);
+  if (!m) throw new Error(`Not canonical money: ${canonical}`);
+  const v = BigInt(m[2]) * HUNDRED + BigInt(m[3]);
+  return m[1] ? -v : v;
+}
+
+export function fromCents(cents: bigint): string {
+  const negative = cents < ZERO;
+  const digits = (negative ? -cents : cents).toString().padStart(3, "0");
+  return `${negative ? "-" : ""}${digits.slice(0, -2)}.${digits.slice(-2)}`;
+}
+
+export function absCents(cents: bigint): bigint {
+  return cents < ZERO ? -cents : cents;
+}
+
+function toUnits(decimal: string, places: number): bigint {
+  const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(decimal);
+  if (!m) throw new Error(`Not a decimal: ${decimal}`);
+  const fraction = (m[3] ?? "").padEnd(places, "0").slice(0, places);
+  const v = BigInt(m[2] + fraction);
+  return m[1] ? -v : v;
+}
+
+/** quantity times unit price, each with up to four decimals, rounded half up to cents. */
+export function mulToCents(quantity: string, unitPrice: string): bigint {
+  const product = toUnits(quantity, 4) * toUnits(unitPrice, 4);
+  const divisor = BigInt(1_000_000);
+  const magnitude = (absCents(product) + divisor / BigInt(2)) / divisor;
+  return product < ZERO ? -magnitude : magnitude;
+}

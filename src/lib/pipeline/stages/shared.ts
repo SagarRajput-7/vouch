@@ -1,8 +1,9 @@
 import { StageError } from "@/lib/pipeline/errors";
 import type { ExtractionResult } from "@/lib/pipeline/extract/schema";
 import { groundExtraction, type GroundingMap } from "@/lib/pipeline/ground/extraction";
-import type { ParsedPage, StageContext } from "@/lib/pipeline/types";
+import type { IssueDraft, ParsedPage, StageContext } from "@/lib/pipeline/types";
 import { extractionsRepo } from "@/lib/repo/extractions";
+import { issuesRepo } from "@/lib/repo/issues";
 import { pagesRepo } from "@/lib/repo/pages";
 
 /**
@@ -27,4 +28,9 @@ export async function loadPages(ctx: StageContext): Promise<ParsedPage[]> {
 export async function loadGrounding(ctx: StageContext): Promise<GroundingMap> {
   ctx.state.grounding ??= groundExtraction(await loadExtraction(ctx), await loadPages(ctx));
   return ctx.state.grounding;
+}
+
+export async function loadIssues(ctx: StageContext): Promise<IssueDraft[]> {
+  ctx.state.issues ??= await issuesRepo.listOpenDrafts(ctx.documentId);
+  return ctx.state.issues;
 }

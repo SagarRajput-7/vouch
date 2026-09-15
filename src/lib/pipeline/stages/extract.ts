@@ -6,6 +6,7 @@ import { getModelProvider } from "@/lib/pipeline/extract/model";
 import type { ModelProvider, Stage } from "@/lib/pipeline/types";
 import { documentsRepo } from "@/lib/repo/documents";
 import { extractionsRepo } from "@/lib/repo/extractions";
+import { issuesRepo } from "@/lib/repo/issues";
 import { usageRepo } from "@/lib/repo/usage";
 
 export const extractStage: Stage = {
@@ -65,6 +66,7 @@ export const extractStage: Stage = {
 
     if (result.docType.value === "other") {
       await documentsRepo.update(ctx.documentId, { docType: "other" });
+      await issuesRepo.replaceForDocument(ctx.documentId, [{ code: "V011", severity: "blocking", fieldPaths: [], message: result.docType.reason, suggestion: null }]);
       await documentsRepo.setStatus(ctx.documentId, "rejected", { code: "not_an_invoice", message: result.docType.reason });
       return { halt: true, meta: { docType: "other", reason: result.docType.reason } };
     }

@@ -270,3 +270,10 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** A hosted OCR API; asking the model for word boxes; committing the traineddata file.
 **Reasoning.** Grounding needs word boxes the model does not return, and a second paid service adds a key and a bill for a reviewer to set up. Tesseract is free, deterministic, and good enough on office scans; the caps keep a single job inside the function's time limit. Committing 10 MB of language data would bloat every clone for a file a CDN serves in a second.
 **Cut.** OCR beyond five pages per document and non-English language packs.
+
+## 2026-09-15: Ungrounded line amounts warn; ungrounded header amounts block
+
+**Decision.** V010 is blocking for subtotal, tax, shipping, discount and total, and a warning for individual line-item amounts.
+**Alternatives.** Blocking for every money field, as the spec's table reads; no rule for line items.
+**Reasoning.** The header amounts are the invoice's financial truth and must be seen on the page before anyone vouches for them. A line amount is already corroborated by the line-sum check, and one OCR miss on a 25-line scan should not stop verification of a document whose totals are grounded and add up.
+**Cut.** Nothing; the warning still surfaces the line in the review order.

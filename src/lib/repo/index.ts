@@ -7,3 +7,4 @@ export { jobsRepo } from "./jobs";
 export { extractionsRepo } from "./extractions";
 export { usageRepo } from "./usage";
 export { invoicesRepo } from "./invoices";
+export { issuesRepo } from "./issues";

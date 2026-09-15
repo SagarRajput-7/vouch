@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { invoices, lineItems, type InvoiceFields, type LineItemMeta } from "@/lib/db/schema";
+import { documents, invoices, lineItems, type InvoiceFields, type LineItemMeta } from "@/lib/db/schema";
 
 export type Invoice = typeof invoices.$inferSelect;
 export type LineItem = typeof lineItems.$inferSelect;
@@ -47,5 +47,16 @@ export const invoicesRepo = {
     if (!invoice) return null;
     const items = await db.query.lineItems.findMany({ where: eq(lineItems.documentId, documentId), orderBy: (t, { asc }) => [asc(t.idx)] });
     return { invoice, lineItems: items };
+  },
+
+  /** Another document in the workspace with the same vendor key and invoice number. */
+  async findDuplicate(workspaceId: string, vendorKey: string, invoiceNumber: string, excludeDocumentId: string): Promise<{ documentId: string; filename: string } | null> {
+    const rows = await getDb()
+      .select({ documentId: invoices.documentId, filename: documents.originalFilename })
+      .from(invoices)
+      .innerJoin(documents, eq(documents.id, invoices.documentId))
+      .where(and(eq(invoices.workspaceId, workspaceId), eq(invoices.vendorKey, vendorKey), eq(invoices.invoiceNumber, invoiceNumber), ne(invoices.documentId, excludeDocumentId)))
+      .limit(1);
+    return rows[0] ?? null;
   },
 };
