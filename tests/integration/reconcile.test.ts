@@ -127,7 +127,7 @@ describe("reconcile stage", () => {
 
     // A fresh context, as after a crash and re-claim, must not spend another model call.
     const fresh = (await documentsRepo.getByIdUnscoped(doc.id))!;
-    const out = await reconcileStage.run({ documentId: fresh.id, workspaceId: fresh.workspaceId, jobId: job.id, document: fresh, state: {} });
+    const out = await reconcileStage.run({ documentId: fresh.id, workspaceId: fresh.workspaceId, jobId: job.id, runId: "run-reconcile-test", document: fresh, state: {} });
     expect(out.meta).toMatchObject({ skipped: "already_reconciled" });
     expect(provider.calls).toHaveLength(2);
   });
@@ -159,7 +159,7 @@ describe("reconcile stage", () => {
       { code: "V003", severity: "blocking", fieldPaths: ["total", "subtotal"], message: "The subtotal is 1630.00 but the total reads 1764.48.", suggestion: null },
     ]);
     const fresh = (await documentsRepo.getByIdUnscoped(doc.id))!;
-    const out = await reconcileStage.run({ documentId: fresh.id, workspaceId: fresh.workspaceId, jobId: job.id, document: fresh, state: {} });
+    const out = await reconcileStage.run({ documentId: fresh.id, workspaceId: fresh.workspaceId, jobId: job.id, runId: "run-reconcile-test", document: fresh, state: {} });
     expect(out.meta).toMatchObject({ skipped: "already_reconciled", repaired: true });
     expect(await issuesRepo.listByDocument(doc.id)).toEqual([]);
     // Repair reads the adopted row; it never buys a third answer.
@@ -176,7 +176,7 @@ describe("reconcile stage", () => {
     await usageRepo.record({ workspaceId: doc.workspaceId, documentId: null, model: "claude-sonnet-5", inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costMicros: 3_000_000 });
 
     const fresh = (await documentsRepo.getByIdUnscoped(doc.id))!;
-    const out = await reconcileStage.run({ documentId: fresh.id, workspaceId: fresh.workspaceId, jobId: job.id, document: fresh, state: {} });
+    const out = await reconcileStage.run({ documentId: fresh.id, workspaceId: fresh.workspaceId, jobId: job.id, runId: "run-reconcile-test", document: fresh, state: {} });
     expect(out.meta).toEqual({ skipped: "budget_paused" });
     expect(provider.calls).toHaveLength(1);
     // The blocking issue stays; a document nobody could improve is still a document to review.

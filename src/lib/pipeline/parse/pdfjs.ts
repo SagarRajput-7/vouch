@@ -1,5 +1,7 @@
 import { definePDFJSModule, getDocumentProxy, getResolvedPDFJS } from "unpdf";
 import { StageError } from "@/lib/pipeline/errors";
+import { PARSE_LIMITS } from "./limits";
+import { withTimeout } from "./timeout";
 
 let ready: Promise<void> | undefined;
 
@@ -20,8 +22,10 @@ export async function openPdf(bytes: Uint8Array) {
     // pdf.js may take ownership of the buffer it is handed; always pass a copy. verbosity 0 keeps
     // its font-substitution chatter (several lines per rendered page) out of the logs; real
     // failures still arrive as exceptions.
-    return await getDocumentProxy(new Uint8Array(bytes), { verbosity: 0 });
+    return await withTimeout(getDocumentProxy(new Uint8Array(bytes), { verbosity: 0 }), PARSE_LIMITS.pdfOperationTimeoutMs, "open document");
   } catch (err) {
+    // A timeout is already the specific, non-retryable answer; do not relabel it "unreadable".
+    if (err instanceof StageError) throw err;
     const name = err instanceof Error ? err.name : "";
     const detail = err instanceof Error ? err.message : String(err);
     if (name === "PasswordException") {

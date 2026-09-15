@@ -2,7 +2,9 @@ import type { PositionedToken } from "@/lib/db/schema";
 import { StageError } from "@/lib/pipeline/errors";
 import type { ParsedPage } from "@/lib/pipeline/types";
 import { assignLines, type RawToken } from "./lines";
+import { PARSE_LIMITS } from "./limits";
 import { imagePaintOps, openPdf } from "./pdfjs";
+import { withTimeout } from "./timeout";
 
 type TextItem = { str: string; transform: number[]; width: number; height: number };
 type Viewport = { width: number; height: number; rotation: number; convertToViewportPoint(x: number, y: number): number[] };
@@ -73,7 +75,7 @@ export async function extractPdfText(bytes: Uint8Array, maxPages: number, minTex
       const page = await pdf.getPage(pageNo);
       try {
         const viewport = page.getViewport({ scale: 1 }) as unknown as Viewport;
-        const content = await page.getTextContent();
+        const content = await withTimeout(page.getTextContent(), PARSE_LIMITS.pdfOperationTimeoutMs, `page ${pageNo} text`);
         const items = (content.items as unknown[]).filter(
           (i): i is TextItem => typeof i === "object" && i !== null && "str" in i && "transform" in i,
         );
@@ -81,7 +83,7 @@ export async function extractPdfText(bytes: Uint8Array, maxPages: number, minTex
         // Reading the operator list is the cheap way to tell a scan from a page that is simply
         // sparse: a photographed invoice paints an image, a blank or separator page paints none.
         if (readableTokens(tokens) < minTextTokens) {
-          const { fnArray } = await page.getOperatorList();
+          const { fnArray } = await withTimeout(page.getOperatorList(), PARSE_LIMITS.pdfOperationTimeoutMs, `page ${pageNo} operators`);
           if (fnArray.some((fn) => imageOps.has(fn))) imageOnlyPages.push(pageNo);
         }
         pages.push({

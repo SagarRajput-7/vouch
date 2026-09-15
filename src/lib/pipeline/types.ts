@@ -72,6 +72,8 @@ export type StageContext = {
   documentId: string;
   workspaceId: string;
   jobId: string;
+  /** The pipeline_runs row for this attempt at this stage, so a stage can tell it apart from an earlier, abandoned one. */
+  runId: string;
   document: Document;
   state: StageState;
 };

@@ -24,7 +24,9 @@ const TIMEOUT_MS = 90_000;
 
 function defaultClient(): MessagesClient {
   if (!env.ANTHROPIC_API_KEY) throw new StageError("model_auth", "Model credentials are not configured.", undefined, { retryable: false });
-  return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, timeout: TIMEOUT_MS, maxRetries: 2 }) as unknown as MessagesClient;
+  // One retry, not the SDK's default of two: the queue already retries the whole job, and a third
+  // 90 second attempt inside one call would blow the function's time budget for no new information.
+  return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, timeout: TIMEOUT_MS, maxRetries: 1 }) as unknown as MessagesClient;
 }
 
 function toBase64(bytes: Uint8Array): string {

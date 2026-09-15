@@ -27,7 +27,7 @@ async function seed(name: string, mime: string): Promise<StageContext> {
     sha256: sha,
     blobKey,
   });
-  return { documentId: document.id, workspaceId: info.workspaceId, jobId: "job-parse-test", document, state: {} };
+  return { documentId: document.id, workspaceId: info.workspaceId, jobId: "job-parse-test", runId: "run-parse-test", document, state: {} };
 }
 
 const blankPage = (): ParsedPage => ({ pageNo: 1, width: 100, height: 200, rotation: 0, textSource: "none", ocrMeanConfidence: null, tokens: [] });

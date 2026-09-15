@@ -17,6 +17,7 @@ import { validateStage } from "@/lib/pipeline/stages/validate";
 import type { ExtractOptions, ModelInput, ModelProvider } from "@/lib/pipeline/types";
 import { claimJobs } from "@/lib/queue/claim";
 import { documentsRepo } from "@/lib/repo/documents";
+import { extractionsRepo } from "@/lib/repo/extractions";
 import { invoicesRepo } from "@/lib/repo/invoices";
 import { issuesRepo } from "@/lib/repo/issues";
 import { jobsRepo } from "@/lib/repo/jobs";
@@ -126,8 +127,14 @@ describe("full pipeline in mock mode", () => {
     expect(page.textSource).toBe("ocr");
     expect(page.ocrMeanConfidence).toBeGreaterThan(0.4);
     const stored = (await invoicesRepo.getByDocument(s.workspaceId, s.docId))!;
-    const located = ["vendorName", "invoiceNumber", "total"].filter((f) => stored.invoice.fields[f].bbox !== null);
-    expect(located.length).toBeGreaterThanOrEqual(2);
+    // Deterministic, and the point of the sample: Tesseract reads the printed 366.00 as 66.00
+    // where the shadow crosses the digit, so the total cannot be found on the page even though
+    // the vendor and the invoice number can. Vouch refuses to vouch for the number it cannot see.
+    expect(stored.invoice.fields.vendorName.bbox).not.toBeNull();
+    expect(stored.invoice.fields.invoiceNumber.bbox).not.toBeNull();
+    expect(stored.invoice.fields.total.bbox).toBeNull();
+    expect((await issuesRepo.listByDocument(s.docId)).map((i) => i.code)).toContain("V010");
+    expect(doc?.status).toBe("needs_review");
   }, 180_000);
 
   it("reads a low-resolution scanned PDF through OCR and stores it for review", async () => {
@@ -171,6 +178,38 @@ describe("full pipeline in mock mode", () => {
     expect(doc?.failureMessage).toBe("Processing failed. Try again.");
     // parse succeeded on the first attempt and is never repeated
     expect((await pipelineRunsRepo.listByDocument(s.docId)).filter((r) => r.stage === "parse")).toHaveLength(1);
+  });
+
+  it("adopts the extraction a crashed attempt already paid for instead of buying it again", async () => {
+    const s = await seed("clean-digital.pdf");
+    let calls = 0;
+    const mock = new MockModelProvider(manifestLookup);
+    setModelProviderForTests({
+      name: "live",
+      extract: async (input: ModelInput, options?: ExtractOptions) => {
+        calls += 1;
+        return mock.extract(input, options);
+      },
+    });
+
+    // The run row a killed attempt leaves behind: started before the extraction it never got to
+    // checkpoint. Created first so its startedAt really does precede the extraction's createdAt.
+    const abandoned = await pipelineRunsRepo.start(s.docId, "extract", s.jobId);
+    await runJob((await jobsRepo.getById(s.jobId))!, [parseStage, extractStage]);
+    expect(calls).toBe(1);
+
+    // Drop the checkpoint the successful attempt wrote, so the runner re-enters extract exactly
+    // as it would after a crash between recording the extraction and finishing the run.
+    await getDb().execute(sql`delete from pipeline_runs where document_id = ${s.docId} and stage = 'extract' and status = 'succeeded'`);
+    await jobsRepo.requeue(s.jobId);
+    await runJob((await jobsRepo.getById(s.jobId))!, [parseStage, extractStage]);
+
+    expect(calls).toBe(1);
+    const runs = await pipelineRunsRepo.listByDocument(s.docId);
+    expect(runs.find((r) => r.id === abandoned.id)).toMatchObject({ status: "failed", error: "abandoned" });
+    expect(runs.find((r) => r.stage === "extract" && r.status === "succeeded")?.meta).toMatchObject({ reused: true, docType: "invoice" });
+    expect((await extractionsRepo.latestInitial(s.docId))?.result.fields.total.value).toBe("1764.48");
+    expect((await documentsRepo.getByIdUnscoped(s.docId))?.docType).toBe("invoice");
   });
 
   it("finalises a document whose reconcile was paused by the budget", async () => {

@@ -6,6 +6,7 @@ import { imageSize } from "@/lib/pipeline/parse/image-size";
 import { assignLines } from "@/lib/pipeline/parse/lines";
 import { extractPdfText } from "@/lib/pipeline/parse/pdf-text";
 import { renderPagePng } from "@/lib/pipeline/parse/raster";
+import { withTimeout } from "@/lib/pipeline/parse/timeout";
 
 const sample = (name: string) => readFile(path.resolve("samples/out", name)).then((b) => new Uint8Array(b));
 
@@ -94,5 +95,24 @@ describe("renderPagePng", () => {
 
   it("reports an unrenderable page as a fatal stage error", async () => {
     await expect(renderPagePng(await sample("clean-digital.pdf"), 7, 2)).rejects.toMatchObject({ code: "scan_unsupported", retryable: false });
+  });
+});
+
+describe("withTimeout", () => {
+  // Every pdf.js call the parse stage makes is wrapped in this, since pdf.js cannot be cancelled
+  // and a malformed file can stall one indefinitely. A slow fixture would be a slow test, so the
+  // stall is stubbed here and the real calls are covered by the tests above.
+  it("turns a stalled pdf.js operation into a fatal stage error", async () => {
+    const stalled = withTimeout(new Promise<void>(() => undefined), 5, "test");
+    await expect(stalled).rejects.toMatchObject({
+      code: "pdf_timeout",
+      retryable: false,
+      userMessage: "This PDF took too long to read. It may be damaged.",
+      message: "test",
+    });
+  });
+
+  it("passes a value through when the operation finishes in time", async () => {
+    await expect(withTimeout(Promise.resolve(7), 1_000, "test")).resolves.toBe(7);
   });
 });

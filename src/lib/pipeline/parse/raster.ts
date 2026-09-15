@@ -1,12 +1,20 @@
 import { renderPageAsImage } from "unpdf";
 import { StageError } from "@/lib/pipeline/errors";
+import { PARSE_LIMITS } from "./limits";
 import { openPdf, type PdfDocument } from "./pdfjs";
+import { withTimeout } from "./timeout";
 
 async function render(doc: PdfDocument, pageNo: number, scale: number): Promise<Uint8Array> {
   try {
-    const png = await renderPageAsImage(doc, pageNo, { canvasImport: () => import("@napi-rs/canvas"), scale });
+    const png = await withTimeout(
+      renderPageAsImage(doc, pageNo, { canvasImport: () => import("@napi-rs/canvas"), scale }),
+      PARSE_LIMITS.pdfOperationTimeoutMs,
+      `page ${pageNo} render`,
+    );
     return new Uint8Array(png);
   } catch (err) {
+    // A timeout is already the specific, non-retryable answer; do not relabel it "unsupported".
+    if (err instanceof StageError) throw err;
     throw new StageError("scan_unsupported", "This scanned PDF uses a format Vouch cannot render.", err instanceof Error ? err.message : String(err), { retryable: false });
   }
 }
