@@ -284,3 +284,10 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** Always take the newer answer; merge field by field; ask the model to arbitrate.
 **Reasoning.** A re-read that introduces a new contradiction is worse for the reviewer than the original. Counting blocking issues is a cheap, explainable criterion, and keeping the losing attempt lets the trace show what the model said the second time.
 **Cut.** Field-level merging. It sounds smarter but makes the provenance of each value harder to explain.
+
+## 2026-09-15: Samples replay recorded extractions in every mode
+
+**Decision.** Each bundled sample ships with the recorded live model output for its file hash. The mock provider replays it offline; the live provider replays it before calling the API. Only files that are not samples reach the model.
+**Alternatives.** Replay only in mock mode; hand-written ground truth as the mock answer.
+**Reasoning.** Reviewers click "load samples" first. Replaying real model output means the demo shows real model behaviour, including its confidence values and any quirks, at zero cost and with no rate-limit risk, while their own uploads exercise the live path.
+**Cut.** Freshness. Recordings are refreshed by `pnpm samples:record` when the prompt version changes.

@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { ModelInput, ModelProvider, ModelUsage } from "@/lib/pipeline/types";
+import type { ExtractOptions, ModelInput, ModelProvider, ModelUsage } from "@/lib/pipeline/types";
 import { groundTruthSchema, manifestSchema, type GroundTruth } from "./ground-truth";
+import { readRecording } from "./recordings";
 import { extractionResultSchema, fieldNames, type ExtractionResult } from "./schema";
 
 export type GroundTruthLookup = (sha256: string) => Promise<GroundTruth | null>;
@@ -61,21 +62,30 @@ export class MockModelProvider implements ModelProvider {
   readonly name = "mock";
   constructor(private readonly lookup: GroundTruthLookup = manifestLookup) {}
 
-  async extract(input: ModelInput) {
+  /**
+   * A recorded live answer for this file hash wins over the hand-written ground truth, so the
+   * offline demo shows what the model actually said. A reconcile with no recording falls back to
+   * the ground truth, which is the same answer the first look gave, so a mock second look is never
+   * "better" and is never adopted.
+   */
+  async extract(input: ModelInput, options?: ExtractOptions) {
     const started = Date.now();
-    const gt = await this.lookup(input.sha256);
-    const result: ExtractionResult = gt
-      ? groundTruthToExtraction(gt)
-      : extractionResultSchema.parse({
-          docType: {
-            value: "other",
-            confidence: 1,
-            reason: "Mock mode only recognises the bundled sample documents. Set ANTHROPIC_API_KEY to extract your own files.",
-          },
-          fields: Object.fromEntries(fieldNames.map((f) => [f, { value: null, sourceText: null, page: null, confidence: 1 }])),
-          lineItems: [],
-          notes: null,
-        });
+    const rec = await readRecording(input.sha256, options?.focus ? "reconcile" : "initial");
+    const gt = rec ? null : await this.lookup(input.sha256);
+    const result: ExtractionResult = rec
+      ? rec.result
+      : gt
+        ? groundTruthToExtraction(gt)
+        : extractionResultSchema.parse({
+            docType: {
+              value: "other",
+              confidence: 1,
+              reason: "Mock mode only recognises the bundled sample documents. Set ANTHROPIC_API_KEY to extract your own files.",
+            },
+            fields: Object.fromEntries(fieldNames.map((f) => [f, { value: null, sourceText: null, page: null, confidence: 1 }])),
+            lineItems: [],
+            notes: null,
+          });
     const usage: ModelUsage = {
       model: "mock",
       inputTokens: 0,
@@ -85,6 +95,11 @@ export class MockModelProvider implements ModelProvider {
       latencyMs: Date.now() - started,
       costMicros: 0,
     };
-    return { result, usage, raw: { source: gt ? "ground-truth" : "unknown", sha256: input.sha256 }, promptVersion: MOCK_PROMPT_VERSION };
+    return {
+      result,
+      usage,
+      raw: { source: rec ? "recording" : gt ? "ground-truth" : "unknown", sha256: input.sha256, recordedModel: rec?.model ?? null },
+      promptVersion: rec ? rec.promptVersion : MOCK_PROMPT_VERSION,
+    };
   }
 }
