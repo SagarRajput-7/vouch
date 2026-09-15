@@ -1,16 +1,19 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { PDFDocument } from "pdf-lib";
 import { imageSize } from "@/lib/pipeline/parse/image-size";
-import { assignLines, extractPdfText } from "@/lib/pipeline/parse/pdf-text";
+import { assignLines } from "@/lib/pipeline/parse/lines";
+import { extractPdfText } from "@/lib/pipeline/parse/pdf-text";
 import { renderPagePng } from "@/lib/pipeline/parse/raster";
 
 const sample = (name: string) => readFile(path.resolve("samples/out", name)).then((b) => new Uint8Array(b));
 
 describe("extractPdfText", () => {
   it("returns normalised word tokens in reading order for a digital PDF", async () => {
-    const { pageCount, pages } = await extractPdfText(await sample("clean-digital.pdf"), 10);
+    const { pageCount, pages, imageOnlyPages } = await extractPdfText(await sample("clean-digital.pdf"), 10, 20);
     expect(pageCount).toBe(1);
+    expect(imageOnlyPages).toEqual([]);
     const [page] = pages;
     expect(page.pageNo).toBe(1);
     expect(page.textSource).toBe("pdf");
@@ -34,11 +37,27 @@ describe("extractPdfText", () => {
   });
 
   it("rejects a document over the page limit without retrying", async () => {
-    await expect(extractPdfText(await sample("clean-digital.pdf"), 0)).rejects.toMatchObject({ code: "too_many_pages", retryable: false });
+    await expect(extractPdfText(await sample("clean-digital.pdf"), 0, 20)).rejects.toMatchObject({ code: "too_many_pages", retryable: false });
   });
 
   it("fails fast on bytes that only pretend to be a PDF", async () => {
-    await expect(extractPdfText(new TextEncoder().encode("%PDF-1.4 nonsense"), 10)).rejects.toMatchObject({ code: "pdf_unreadable", retryable: false });
+    await expect(extractPdfText(new TextEncoder().encode("%PDF-1.4 nonsense"), 10, 20)).rejects.toMatchObject({ code: "pdf_unreadable", retryable: false });
+  });
+
+  it("does not offer a blank page for OCR, since there is no image to read", async () => {
+    const doc = await PDFDocument.create();
+    doc.addPage();
+    const { pages, imageOnlyPages } = await extractPdfText(await doc.save(), 10, 20);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].textSource).toBe("none");
+    expect(pages[0].tokens).toEqual([]);
+    expect(imageOnlyPages).toEqual([]);
+  });
+
+  it("offers a page that paints an image and carries no text for OCR", async () => {
+    const { pages, imageOnlyPages } = await extractPdfText(await sample("scan-lowres.pdf"), 10, 20);
+    expect(imageOnlyPages).toEqual([1]);
+    expect(pages[0].textSource).toBe("none");
   });
 });
 
@@ -51,12 +70,21 @@ describe("assignLines", () => {
     ]);
     expect(tokens.map((t) => `${t.line}:${t.text}`)).toEqual(["0:a", "0:b", "1:c"]);
   });
+
+  it("keeps a tall word on the line it shares a baseline with", () => {
+    const tokens = assignLines([
+      // Both sit on the same baseline (y + h = 0.16); only their top edges are far apart.
+      { text: "small", x: 0.3, y: 0.14, w: 0.1, h: 0.02 },
+      { text: "TALL", x: 0.1, y: 0.1, w: 0.1, h: 0.06 },
+    ]);
+    expect(tokens.map((t) => `${t.line}:${t.text}`)).toEqual(["0:TALL", "0:small"]);
+  });
 });
 
 describe("renderPagePng", () => {
   it("renders page 1 to a PNG sized by the scale", async () => {
     const bytes = await sample("clean-digital.pdf");
-    const { pages } = await extractPdfText(bytes, 10);
+    const { pages } = await extractPdfText(bytes, 10, 20);
     const png = await renderPagePng(bytes, 1, 2);
     expect(Array.from(png.slice(0, 4))).toEqual([0x89, 0x50, 0x4e, 0x47]);
     const size = await imageSize(png);

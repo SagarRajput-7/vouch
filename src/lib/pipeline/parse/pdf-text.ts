@@ -1,35 +1,26 @@
 import type { PositionedToken } from "@/lib/db/schema";
 import { StageError } from "@/lib/pipeline/errors";
 import type { ParsedPage } from "@/lib/pipeline/types";
-import { openPdf } from "./pdfjs";
+import { assignLines, type RawToken } from "./lines";
+import { imagePaintOps, openPdf } from "./pdfjs";
 
 type TextItem = { str: string; transform: number[]; width: number; height: number };
 type Viewport = { width: number; height: number; rotation: number; convertToViewportPoint(x: number, y: number): number[] };
-type RawToken = Omit<PositionedToken, "line">;
 
-export type PdfTextResult = { pageCount: number; pages: ParsedPage[] };
+export type PdfTextResult = {
+  pageCount: number;
+  pages: ParsedPage[];
+  /** Pages with too little text to ground on that do paint an image, so OCR has something to read. */
+  imageOnlyPages: number[];
+};
 
 function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
 }
 
-/** Groups tokens into reading-order lines by baseline proximity, then sorts each line left to right. */
-export function assignLines(tokens: RawToken[]): PositionedToken[] {
-  const sorted = [...tokens].sort((a, b) => a.y - b.y || a.x - b.x);
-  const out: PositionedToken[] = [];
-  let line = -1;
-  let lineY = Number.NEGATIVE_INFINITY;
-  let lineH = 0;
-  for (const t of sorted) {
-    const tolerance = Math.max(t.h, lineH) * 0.5;
-    if (Math.abs(t.y - lineY) > tolerance) {
-      line += 1;
-      lineY = t.y;
-      lineH = t.h;
-    }
-    out.push({ ...t, line });
-  }
-  return out.sort((a, b) => a.line - b.line || a.x - b.x);
+/** Tokens carrying a letter or a digit: the ones grounding can match. Punctuation alone is noise. */
+export function readableTokens(tokens: Array<{ text: string }>): number {
+  return tokens.filter((t) => /[\p{L}\p{N}]/u.test(t.text)).length;
 }
 
 /**
@@ -52,14 +43,11 @@ function wordsFrom(item: TextItem, viewport: Viewport): RawToken[] {
     ];
     const xs = corners.map((p) => p[0]);
     const ys = corners.map((p) => p[1]);
-    const x = Math.min(...xs);
-    const y = Math.min(...ys);
-    return {
-      x: clamp01(x / viewport.width),
-      y: clamp01(y / viewport.height),
-      w: clamp01((Math.max(...xs) - x) / viewport.width),
-      h: clamp01((Math.max(...ys) - y) / viewport.height),
-    };
+    // Clamp the extents, not the width and height: clamping those independently could leave a box
+    // whose x + w runs past the page edge, and every consumer treats these as fractions of the page.
+    const x = clamp01(Math.min(...xs) / viewport.width);
+    const y = clamp01(Math.min(...ys) / viewport.height);
+    return { x, y, w: clamp01(Math.max(...xs) / viewport.width) - x, h: clamp01(Math.max(...ys) / viewport.height) - y };
   };
   const out: RawToken[] = [];
   const re = /\S+/g;
@@ -72,32 +60,44 @@ function wordsFrom(item: TextItem, viewport: Viewport): RawToken[] {
   return out;
 }
 
-export async function extractPdfText(bytes: Uint8Array, maxPages: number): Promise<PdfTextResult> {
+export async function extractPdfText(bytes: Uint8Array, maxPages: number, minTextTokens: number): Promise<PdfTextResult> {
   const pdf = await openPdf(bytes);
   try {
     if (pdf.numPages > maxPages) {
       throw new StageError("too_many_pages", `Documents are limited to ${maxPages} pages. This one has ${pdf.numPages}.`, undefined, { retryable: false });
     }
+    const imageOps = await imagePaintOps();
     const pages: ParsedPage[] = [];
+    const imageOnlyPages: number[] = [];
     for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
       const page = await pdf.getPage(pageNo);
-      const viewport = page.getViewport({ scale: 1 }) as unknown as Viewport;
-      const content = await page.getTextContent();
-      const tokens = (content.items as unknown[])
-        .filter((i): i is TextItem => typeof i === "object" && i !== null && "str" in i && "transform" in i)
-        .flatMap((i) => wordsFrom(i, viewport));
-      pages.push({
-        pageNo,
-        width: viewport.width,
-        height: viewport.height,
-        rotation: viewport.rotation,
-        textSource: tokens.length > 0 ? "pdf" : "none",
-        ocrMeanConfidence: null,
-        tokens: assignLines(tokens),
-      });
-      page.cleanup();
+      try {
+        const viewport = page.getViewport({ scale: 1 }) as unknown as Viewport;
+        const content = await page.getTextContent();
+        const items = (content.items as unknown[]).filter(
+          (i): i is TextItem => typeof i === "object" && i !== null && "str" in i && "transform" in i,
+        );
+        const tokens: PositionedToken[] = assignLines(items.flatMap((i) => wordsFrom(i, viewport)));
+        // Reading the operator list is the cheap way to tell a scan from a page that is simply
+        // sparse: a photographed invoice paints an image, a blank or separator page paints none.
+        if (readableTokens(tokens) < minTextTokens) {
+          const { fnArray } = await page.getOperatorList();
+          if (fnArray.some((fn) => imageOps.has(fn))) imageOnlyPages.push(pageNo);
+        }
+        pages.push({
+          pageNo,
+          width: viewport.width,
+          height: viewport.height,
+          rotation: viewport.rotation,
+          textSource: tokens.length > 0 ? "pdf" : "none",
+          ocrMeanConfidence: null,
+          tokens,
+        });
+      } finally {
+        page.cleanup();
+      }
     }
-    return { pageCount: pdf.numPages, pages };
+    return { pageCount: pdf.numPages, pages, imageOnlyPages };
   } finally {
     // pdf.js 6 moved document teardown onto the loading task; destroying it also stops the worker.
     await pdf.loadingTask.destroy();

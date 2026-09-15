@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { createWorker, type Worker } from "tesseract.js";
 import type { PositionedToken } from "@/lib/db/schema";
 import { env } from "@/lib/env";
-import { assignLines } from "./pdf-text";
+import { assignLines, type RawToken } from "./lines";
 
 export type OcrResult = { tokens: PositionedToken[]; meanConfidence: number };
 
@@ -24,7 +24,7 @@ export async function createOcrWorker(): Promise<Worker> {
 
 /** Converts Tesseract's block tree to normalised tokens with a mean word confidence in [0, 1]. */
 export function tokensFromBlocks(blocks: OcrBlock[], size: { width: number; height: number }): OcrResult {
-  const raw: Array<Omit<PositionedToken, "line">> = [];
+  const raw: RawToken[] = [];
   const confidences: number[] = [];
   for (const block of blocks) {
     for (const paragraph of block.paragraphs) {

@@ -1,14 +1,26 @@
 import { renderPageAsImage } from "unpdf";
 import { StageError } from "@/lib/pipeline/errors";
-import { ensurePdfjs } from "./pdfjs";
+import { openPdf, type PdfDocument } from "./pdfjs";
 
-/** Renders one page to PNG bytes for OCR. */
-export async function renderPagePng(bytes: Uint8Array, pageNo: number, scale: number): Promise<Uint8Array> {
-  await ensurePdfjs();
+async function render(doc: PdfDocument, pageNo: number, scale: number): Promise<Uint8Array> {
   try {
-    const png = await renderPageAsImage(new Uint8Array(bytes), pageNo, { canvasImport: () => import("@napi-rs/canvas"), scale });
+    const png = await renderPageAsImage(doc, pageNo, { canvasImport: () => import("@napi-rs/canvas"), scale });
     return new Uint8Array(png);
   } catch (err) {
     throw new StageError("scan_unsupported", "This scanned PDF uses a format Vouch cannot render.", err instanceof Error ? err.message : String(err), { retryable: false });
+  }
+}
+
+/**
+ * Renders one page to PNG bytes for OCR. Pass an already-open document when rendering several
+ * pages of the same file: handing over raw bytes re-parses the whole PDF for every page.
+ */
+export async function renderPagePng(source: Uint8Array | PdfDocument, pageNo: number, scale: number): Promise<Uint8Array> {
+  if (!(source instanceof Uint8Array)) return render(source, pageNo, scale);
+  const doc = await openPdf(source);
+  try {
+    return await render(doc, pageNo, scale);
+  } finally {
+    await doc.loadingTask.destroy();
   }
 }

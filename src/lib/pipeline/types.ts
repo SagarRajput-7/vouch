@@ -28,6 +28,7 @@ export type ParsedPage = {
   pageNo: number;
   width: number;
   height: number;
+  /** Page rotation in degrees, metadata only: width, height and every token box are already in display orientation. */
   rotation: number;
   textSource: "pdf" | "ocr" | "none";
   ocrMeanConfidence: number | null;
