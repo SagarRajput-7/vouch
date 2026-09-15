@@ -12,6 +12,7 @@ import { pagesRepo } from "@/lib/repo/pages";
  * extraction and the pages, so it is recomputed rather than stored.
  */
 export async function loadExtraction(ctx: StageContext): Promise<ExtractionResult> {
+  // Not `??=`: an absent extraction is a stage failure, not a value to assign.
   if (!ctx.state.extraction) {
     const latest = await extractionsRepo.latest(ctx.documentId);
     if (!latest) throw new StageError("no_extraction", "No extraction is available for this document.");

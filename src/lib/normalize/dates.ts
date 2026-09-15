@@ -3,6 +3,9 @@ const MONTHS: Record<string, number> = {
   jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
 };
 
+/** The month words parseDate understands, for callers that need to spot one before parsing. */
+export const MONTH_WORDS: ReadonlySet<string> = new Set(Object.keys(MONTHS));
+
 function valid(y: number, m: number, d: number): boolean {
   if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900 || y > 2200) return false;
   const dt = new Date(Date.UTC(y, m - 1, d));

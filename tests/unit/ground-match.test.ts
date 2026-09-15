@@ -40,6 +40,12 @@ describe("groundValue", () => {
     expect(groundValue(candidatesFor("date", { value: "2026-08-03", sourceText: "Aug 3, 2026" }), [page], base)).toMatchObject({ groundingMethod: "exact", matchedText: "Aug 3, 2026", range: [4, 7] });
   });
 
+  it("reaches a month-first date from an ISO value with no source text", () => {
+    const page = makePage(1, ["Issued August 3, 2026"]);
+    const g = groundValue(candidatesFor("date", { value: "2026-08-03", sourceText: null }), [page], base)!;
+    expect(g).toMatchObject({ groundingMethod: "normalized", matchedText: "August 3, 2026", range: [1, 4] });
+  });
+
   it("tolerates OCR noise with a fuzzy match", () => {
     const page = makePage(1, ["Total 1,764.4B"]);
     const g = groundValue(money("1764.48", "1,764.48"), [page], base)!;

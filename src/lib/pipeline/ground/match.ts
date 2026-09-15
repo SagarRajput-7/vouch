@@ -1,4 +1,4 @@
-import { parseDate } from "@/lib/normalize/dates";
+import { MONTH_WORDS, parseDate } from "@/lib/normalize/dates";
 import { parseMoney } from "@/lib/normalize/money";
 import type { Grounding, ParsedPage } from "@/lib/pipeline/types";
 import type { PositionedToken } from "@/lib/db/schema";
@@ -41,6 +41,8 @@ export type PreparedPage = {
   byKeyChar: Map<string, number[]>;
   /** Positions whose token carries a digit: where an amount or a date can begin. */
   digitStarts: number[];
+  /** Positions whose token is a month word: where a date written month first can begin. */
+  monthStarts: number[];
 };
 
 export type GroundPages = ReadonlyArray<ParsedPage | PreparedPage>;
@@ -87,14 +89,16 @@ export function preparePage(page: ParsedPage): PreparedPage {
   const byRaw = new Map<string, number[]>();
   const byKeyChar = new Map<string, number[]>();
   const digitStarts: number[] = [];
+  const monthStarts: number[] = [];
   for (let i = 0; i < raw.length; i += 1) {
     const first = norm[i].split(" ")[0];
     if (first) push(byNorm, first, i);
     push(byRaw, raw[i], i);
     if (keys[i]) push(byKeyChar, keys[i][0], i);
     if (DIGIT.test(raw[i])) digitStarts.push(i);
+    if (MONTH_WORDS.has(norm[i])) monthStarts.push(i);
   }
-  return { page, raw, norm, keys, byNorm, byRaw, byKeyChar, digitStarts };
+  return { page, raw, norm, keys, byNorm, byRaw, byKeyChar, digitStarts, monthStarts };
 }
 
 export function preparePages(pages: readonly ParsedPage[]): PreparedPage[] {
@@ -132,8 +136,10 @@ function startsFor(p: PreparedPage, c: Candidate): number[] {
   addAll(p.byRaw.get(c.raw.split(" ")[0]));
   const firstNorm = c.norm.split(" ")[0];
   if (firstNorm) addAll(p.byNorm.get(firstNorm));
-  // An amount or a date has to open on a token carrying a digit.
+  // An amount has to open on a token carrying a digit; a date on one of those or on a month word,
+  // so "August 3, 2026" is still reachable from an ISO value the model gave no source text for.
   if (c.money || c.iso) addAll(p.digitStarts);
+  if (c.iso) addAll(p.monthStarts);
   if (c.key.length >= 3) addAll(p.byKeyChar.get(c.key[0]));
   return [...out].sort((a, b) => a - b);
 }
