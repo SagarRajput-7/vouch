@@ -1,0 +1,1 @@
+ALTER TABLE "extractions" ADD COLUMN "adopted" boolean DEFAULT true NOT NULL;

@@ -1,11 +1,19 @@
+import type { ModelUsage } from "@/lib/pipeline/types";
+
 export class StageError extends Error {
+  readonly retryable: boolean;
+  readonly usage: ModelUsage | null;
+
   constructor(
     public readonly code: string,
     public readonly userMessage: string,
     detail?: string,
+    opts: { retryable?: boolean; usage?: ModelUsage } = {},
   ) {
     super(detail ?? userMessage);
     this.name = "StageError";
+    this.retryable = opts.retryable ?? true;
+    this.usage = opts.usage ?? null;
   }
 }
 

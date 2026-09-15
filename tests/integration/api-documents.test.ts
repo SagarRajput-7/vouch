@@ -78,12 +78,12 @@ describe("documents API", () => {
     await drain({ runnerId: "test", reason: "test" });
     const st = await status(req("/api/workspace/status"));
     const stBody = (await st.json()) as { counts: Record<string, number>; inFlight: unknown[] };
-    expect(stBody.counts.needs_review).toBeGreaterThanOrEqual(2);
+    expect(stBody.counts.needs_review).toBeGreaterThanOrEqual(7);
     expect(stBody.counts.rejected).toBeGreaterThanOrEqual(1);
     const list = await listDocuments(req("/api/documents"));
     const listBody = (await list.json()) as { documents: Array<{ status: string }> };
     expect(listBody.documents.length).toBeGreaterThanOrEqual(3);
-  });
+  }, 240_000);
 
   it("reprocesses a rejected document from scratch on manual retry", async () => {
     // Samples were already loaded by the previous test in this shared-workspace file, but
@@ -110,7 +110,7 @@ describe("documents API", () => {
     const finalRes = await detail(req(`/api/documents/${rejected.id}`), { params: Promise.resolve({ id: rejected.id }) });
     const finalBody = (await finalRes.json()) as { document: { status: string }; trace: Array<{ stage: string }> };
     expect(finalBody.document.status).toBe("rejected");
-    expect(finalBody.trace.map((t) => t.stage)).toEqual(["extract"]);
+    expect(finalBody.trace.map((t) => t.stage)).toEqual(["parse", "extract"]);
   });
 
   it("keeps another workspace's queued jobs out of the status response", async () => {

@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { documents } from "./documents";
 
 export const extractionKind = pgEnum("extraction_kind", ["initial", "reconcile"]);
@@ -16,6 +16,8 @@ export const extractions = pgTable(
     cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
     latencyMs: integer("latency_ms").notNull().default(0),
     raw: jsonb("raw").$type<unknown>().notNull(),
+    /** False for a reconcile attempt that did not reduce blocking issues; such rows are kept for the trace but never used. */
+    adopted: boolean("adopted").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("extractions_document_idx").on(t.documentId)],

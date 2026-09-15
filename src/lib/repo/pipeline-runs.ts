@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { pipelineRuns } from "@/lib/db/schema";
 
@@ -36,6 +36,24 @@ export const pipelineRunsRepo = {
       where: and(eq(pipelineRuns.documentId, documentId), eq(pipelineRuns.stage, stage), eq(pipelineRuns.status, "succeeded")),
     });
     return Boolean(row);
+  },
+
+  /**
+   * The newest run of this stage still marked `running` that is not the caller's own. A row can
+   * only be left that way by an attempt that died mid-stage, since the runner finishes every run
+   * it starts, so it marks the boundary after which any work that attempt recorded is recoverable.
+   */
+  async latestAbandoned(documentId: string, stage: string, excludeRunId: string): Promise<PipelineRun | null> {
+    const row = await getDb().query.pipelineRuns.findFirst({
+      where: and(
+        eq(pipelineRuns.documentId, documentId),
+        eq(pipelineRuns.stage, stage),
+        eq(pipelineRuns.status, "running"),
+        ne(pipelineRuns.id, excludeRunId),
+      ),
+      orderBy: [desc(pipelineRuns.startedAt)],
+    });
+    return row ?? null;
   },
 
   async listByDocument(documentId: string): Promise<PipelineRun[]> {

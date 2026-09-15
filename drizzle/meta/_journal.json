@@ -15,6 +15,13 @@
       "when": 1789414885844,
       "tag": "0001_ambiguous_senator_kelly",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789463302842,
+      "tag": "0002_extractions_adopted",
+      "breakpoints": true
     }
   ]
 }

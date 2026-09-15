@@ -249,3 +249,59 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** Remove `packageManager` from `package.json` instead and keep the workflow's explicit version; pin an older `pnpm/action-setup` version that tolerated both being set.
 **Reasoning.** The very first push to GitHub failed all four jobs identically at the setup step: `pnpm/action-setup@v4` now refuses to run when both the workflow's `version` input and `package.json`'s `packageManager` field are set, calling it a version conflict, a behavior change this repo's local validation could not have caught since it only checks YAML syntax, never actually runs the action. `packageManager` is the source of truth other tools also read, so it stays and the redundant workflow input goes.
 **Cut.** Nothing of substance; this is a one-line-per-job configuration fix with no behavior change to what gets installed, since both inputs named the same version.
+
+## 2026-09-15: Official Anthropic SDK over the Vercel AI SDK
+
+**Decision.** Extraction calls Claude through `@anthropic-ai/sdk` directly: `messages.parse` with a zod output format, native PDF and image content blocks, explicit prompt caching, typed errors, and usage fields.
+**Alternatives.** The Vercel AI SDK with `@ai-sdk/anthropic`, which the design spec named.
+**Reasoning.** Vouch uses one model. The AI SDK's provider abstraction buys nothing here and adds a layer whose current API differs from training data, while the official SDK exposes structured outputs, cache controls, and stop reasons directly and is documented for the exact model in use.
+**Cut.** Provider portability. Swapping models later is a one-file change in the provider, which is acceptable.
+
+## 2026-09-15: A daily model budget that pauses instead of failing
+
+**Decision.** Before every live model call the extract stage sums today's spend from the usage ledger; at the cap the job is deferred to the next UTC midnight without consuming an attempt and the document shows "Daily model budget reached" while staying queued.
+**Alternatives.** Fail the job; reject uploads when over budget; a per-workspace budget.
+**Reasoning.** The cap protects a personal card, not a product tier. A pause that resumes on its own is honest to the person who uploaded and needs no operator action. Samples cost nothing, so the demo stays explorable.
+**Cut.** Per-workspace budgets. A single global cap is what the deployment needs.
+
+## 2026-09-15: OCR runs in-process with Tesseract, language data cached at runtime
+
+**Decision.** Image-only PDF pages are rasterised with pdf.js and a Node canvas, then read by tesseract.js in the same function invocation, capped at five pages and 25 seconds per page. The English language data is downloaded on first use and cached under a writable directory (`/tmp/tessdata` on Vercel), never committed.
+**Alternatives.** A hosted OCR API; asking the model for word boxes; committing the traineddata file.
+**Reasoning.** Grounding needs word boxes the model does not return, and a second paid service adds a key and a bill for a reviewer to set up. Tesseract is free, deterministic, and good enough on office scans; the caps keep a single job inside the function's time limit. Committing 10 MB of language data would bloat every clone for a file a CDN serves in a second.
+**Cut.** OCR beyond five pages per document and non-English language packs.
+
+## 2026-09-15: Ungrounded line amounts warn; ungrounded header amounts block
+
+**Decision.** V010 is blocking for subtotal, tax, shipping, discount and total, and a warning for individual line-item amounts.
+**Alternatives.** Blocking for every money field, as the spec's table reads; no rule for line items.
+**Reasoning.** The header amounts are the invoice's financial truth and must be seen on the page before anyone vouches for them. A line amount is already corroborated by the line-sum check, and one OCR miss on a 25-line scan should not stop verification of a document whose totals are grounded and add up.
+**Cut.** Nothing; the warning still surfaces the line in the review order.
+
+## 2026-09-15: Reconcile keeps whichever extraction has fewer blocking issues
+
+**Decision.** A second, focused extraction runs at most once per document and only when validation found an arithmetic contradiction. It replaces the first extraction only if it produces strictly fewer blocking issues. Rejected attempts stay in the extractions table with `adopted = false` for the trace.
+**Alternatives.** Always take the newer answer; merge field by field; ask the model to arbitrate.
+**Reasoning.** A re-read that introduces a new contradiction is worse for the reviewer than the original. Counting blocking issues is a cheap, explainable criterion, and keeping the losing attempt lets the trace show what the model said the second time.
+**Cut.** Field-level merging. It sounds smarter but makes the provenance of each value harder to explain.
+
+## 2026-09-15: Samples replay recorded extractions in every mode
+
+**Decision.** A sample can ship with the recorded live model output for its file hash, produced by `pnpm samples:record` and committed under `samples/recordings/`. The mock provider replays that recording offline and the live provider replays it instead of calling the API, so only files that are not samples reach the model. No recordings are committed yet: until that script has been run against a real key, mock mode answers a sample from its hand-written ground truth and live mode extracts the samples for real.
+**Alternatives.** Replay only in mock mode; hand-written ground truth as the mock answer.
+**Reasoning.** Reviewers click "load samples" first. Replaying real model output means the demo shows real model behaviour, including its confidence values and any quirks, at zero cost and with no rate-limit risk, while their own uploads exercise the live path.
+**Cut.** Freshness. Recordings are refreshed by `pnpm samples:record` when the prompt version changes.
+
+## 2026-09-15: No temperature parameter
+
+**Decision.** Extraction sends no sampling parameters at all: no temperature, no top_p, no top_k. A test pins their absence from the request.
+**Alternatives.** `temperature: 0`, which the design spec named as the determinism lever.
+**Reasoning.** Sonnet 5 rejects sampling parameters outright, so a request carrying `temperature: 0` fails with a 400 rather than behaving deterministically. The levers that remain are the ones that matter more anyway: a structured output schema the answer has to satisfy, adaptive thinking, and a system prompt that forbids computing any value that is not printed. Repeatability is then checked where it counts, by grounding every value back to a box on the page.
+**Cut.** Nothing. The spec's intent survives; only the parameter it named is gone.
+
+## 2026-09-15: pdf.js legacy build under Node, Node 24 floor
+
+**Decision.** The parse stage loads pdf.js's legacy build (`pdfjs-dist/legacy/build/pdf.mjs`), and CI, Vercel (via `package.json`'s `engines` field) and `.nvmrc` are all on Node 24.
+**Alternatives.** The official build on Node 26 only; pinning `pdfjs-dist` to a 5.x release.
+**Reasoning.** The official 6.x build calls `Promise.try` and `Uint8Array.prototype.toHex`, both of which Node 24 (Vercel's runtime) lacks, while the legacy build carries core-js polyfills for both and is the build pdf.js itself recommends for Node.
+**Cut.** Node 22 support.

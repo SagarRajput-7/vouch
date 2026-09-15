@@ -1,0 +1,23 @@
+{
+  "name": "scan-lowres",
+  "docType": "invoice",
+  "fields": {
+    "vendorName": { "value": "Sunrise Bakery Supplies Pty Ltd", "page": 1 },
+    "invoiceNumber": { "value": "SB-4471", "page": 1 },
+    "issueDate": { "value": "2026-06-05", "display": "5 June 2026", "page": 1 },
+    "dueDate": { "value": "2026-06-19", "display": "19 June 2026", "page": 1 },
+    "currency": { "value": "AUD", "page": 1 },
+    "subtotal": { "value": "255.00", "page": 1 },
+    "tax": { "value": "25.50", "page": 1 },
+    "shipping": null,
+    "discount": null,
+    "total": { "value": "280.50", "page": 1 }
+  },
+  "lineItems": [
+    { "description": "Bread flour, 25 kg bag", "quantity": "4", "unitPrice": "42.00", "amount": "168.00" },
+    { "description": "Dried yeast, 500 g", "quantity": "6", "unitPrice": "8.50", "amount": "51.00" },
+    { "description": "Baking parchment, roll", "quantity": "3", "unitPrice": "12.00", "amount": "36.00" }
+  ],
+  "expectedIssues": [],
+  "notes": "Image-only PDF at low resolution and greyscale. OCR confidence is expected to be low; some values may not ground, which is the handled failure the review screen must show."
+}

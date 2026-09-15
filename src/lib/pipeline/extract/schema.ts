@@ -40,5 +40,3 @@ export const extractionResultSchema = z.object({
 export type ExtractedScalar = z.infer<typeof scalarSchema>;
 export type ExtractedLineItem = z.infer<typeof lineItemSchema>;
 export type ExtractionResult = z.infer<typeof extractionResultSchema>;
-
-export const PROMPT_VERSION = "mock-1";

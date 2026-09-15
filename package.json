@@ -17,11 +17,16 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/lib/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "samples:generate": "tsx samples/generate.ts"
+    "samples:generate": "tsx samples/generate.ts",
+    "samples:record": "LLM_MODE=record VOUCH_DISABLE_AUTO_DRAIN=true PGLITE_DATA_DIR=:memory: LOCAL_DATA_DIR=.data/record tsx scripts/record-samples.ts",
+    "eval": "VOUCH_DISABLE_AUTO_DRAIN=true PGLITE_DATA_DIR=:memory: LOCAL_DATA_DIR=.data/eval tsx scripts/eval.ts",
+    "eval:live": "LLM_MODE=live VOUCH_DISABLE_AUTO_DRAIN=true PGLITE_DATA_DIR=:memory: LOCAL_DATA_DIR=.data/eval tsx scripts/eval.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@base-ui/react": "^1.8.0",
     "@electric-sql/pglite": "^0.5.8",
+    "@napi-rs/canvas": "^1.0.9",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@tanstack/react-query": "^5.102.8",
     "@vercel/blob": "^2.8.0",
@@ -34,13 +39,16 @@
     "lucide-react": "^1.45.0",
     "next": "16.3.5",
     "next-themes": "^0.4.6",
+    "pdfjs-dist": "^6.3.289",
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "shadcn": "^4.21.0",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
+    "tesseract.js": "^7.0.0",
     "tw-animate-css": "^1.4.0",
+    "unpdf": "^1.8.1",
     "zod": "^4.6.4"
   },
   "devDependencies": {
@@ -63,5 +71,6 @@
     "typescript": "^5",
     "vitest": "^5.0.0"
   },
-  "packageManager": "pnpm@12.4.1"
+  "packageManager": "pnpm@12.4.1",
+  "engines": { "node": ">=24" }
 }

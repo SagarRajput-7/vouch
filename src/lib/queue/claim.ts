@@ -95,9 +95,13 @@ export async function claimJobs(opts: ClaimOptions): Promise<Job[]> {
   return rows.map(toJob);
 }
 
-/** Returns running jobs whose lock is older than the threshold to the queue with backoff. */
+/**
+ * Returns running jobs whose lock is older than the threshold to the queue with backoff, and
+ * closes off the stage runs a killed invocation left open. Returns the number of jobs swept.
+ */
 export async function sweepStale(thresholdMs: number): Promise<number> {
   const db = getDb();
+  const seconds = Math.floor(thresholdMs / 1000);
   const result = await db.execute<{ id: string }>(sql`
     update jobs
     set status = (case when attempts >= max_attempts then 'dead' else 'queued' end)::job_status,
@@ -107,8 +111,22 @@ export async function sweepStale(thresholdMs: number): Promise<number> {
         locked_by = null,
         updated_at = now()
     where status = 'running'
-      and locked_at < now() - make_interval(secs => ${Math.floor(thresholdMs / 1000)})
+      and locked_at < now() - make_interval(secs => ${seconds})
     returning id
+  `);
+  // A run row left on "running" belongs to an invocation that was killed mid-stage, and the
+  // document's trace would otherwise show that stage running for ever. Rows whose job can still
+  // come back (the statement above has just requeued this crash's job) are left alone: the extract
+  // stage reads them to recognise an answer it has already paid for, and closes them itself.
+  await db.execute(sql`
+    update pipeline_runs
+    set status = 'failed',
+        finished_at = now(),
+        duration_ms = coalesce(duration_ms, (extract(epoch from (now() - started_at)) * 1000)::int),
+        error = coalesce(error, 'stale')
+    where status = 'running'
+      and started_at < now() - make_interval(secs => ${seconds})
+      and (job_id is null or exists (select 1 from jobs j where j.id = pipeline_runs.job_id and j.status in ('dead', 'succeeded')))
   `);
   const rows = (Array.isArray(result) ? result : (result as { rows: unknown[] }).rows) as unknown[];
   return rows.length;

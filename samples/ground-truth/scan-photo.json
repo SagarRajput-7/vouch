@@ -1,0 +1,23 @@
+{
+  "name": "scan-photo",
+  "docType": "invoice",
+  "fields": {
+    "vendorName": { "value": "Bramble & Co. Landscaping", "page": 1 },
+    "invoiceNumber": { "value": "BC-1093", "page": 1 },
+    "issueDate": { "value": "2026-08-12", "display": "12 Aug 2026", "page": 1 },
+    "dueDate": { "value": "2026-08-26", "display": "26 Aug 2026", "page": 1 },
+    "currency": { "value": "GBP", "page": 1 },
+    "subtotal": { "value": "305.00", "page": 1 },
+    "tax": { "value": "61.00", "page": 1 },
+    "shipping": null,
+    "discount": null,
+    "total": { "value": "366.00", "page": 1 }
+  },
+  "lineItems": [
+    { "description": "Hedge trimming, front garden", "quantity": "1", "unitPrice": "180.00", "amount": "180.00" },
+    { "description": "Lawn treatment, autumn feed", "quantity": "2", "unitPrice": "45.00", "amount": "90.00" },
+    { "description": "Green waste removal", "quantity": "1", "unitPrice": "35.00", "amount": "35.00" }
+  ],
+  "expectedIssues": [],
+  "notes": "Phone photo: slight tilt, a shadow across one corner, JPEG artefacts. Exercises the image path and fuzzy grounding."
+}

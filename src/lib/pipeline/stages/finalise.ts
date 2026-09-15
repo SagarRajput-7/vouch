@@ -1,91 +1,25 @@
-import type { FieldMeta, InvoiceFields, LineItemMeta } from "@/lib/db/schema";
-import { parseMoney } from "@/lib/normalize/money";
-import { vendorKey } from "@/lib/normalize/vendor";
+import { buildInvoice, searchTextFor } from "@/lib/pipeline/draft";
 import { StageError } from "@/lib/pipeline/errors";
-import { fieldNames, type ExtractedScalar, type ExtractionResult } from "@/lib/pipeline/extract/schema";
-import { computeRisk, criticalityFor } from "@/lib/pipeline/risk";
+import { riskBand } from "@/lib/pipeline/risk";
 import type { Stage } from "@/lib/pipeline/types";
 import { documentsRepo } from "@/lib/repo/documents";
-import { extractionsRepo } from "@/lib/repo/extractions";
 import { invoicesRepo } from "@/lib/repo/invoices";
-
-const MONEY_FIELDS = ["subtotal", "tax", "shipping", "discount", "total"] as const;
-
-/** Field metadata before grounding runs: no location, so risk reflects only confidence and criticality. */
-export function fieldMetaFrom(path: string, s: ExtractedScalar): FieldMeta {
-  return {
-    value: s.value,
-    sourceText: s.sourceText,
-    page: s.page,
-    bbox: null,
-    groundingScore: 0,
-    groundingMethod: "none",
-    modelConfidence: s.confidence,
-    risk: computeRisk({ groundingScore: 0, blockingIssues: 0, warningIssues: 0, modelConfidence: s.confidence, criticality: criticalityFor(path) }),
-    status: "pending",
-    correctedAt: null,
-  };
-}
-
-function money(s: ExtractedScalar): string | null {
-  return s.value ? parseMoney(s.value) : null;
-}
-
-function isoDate(s: ExtractedScalar): string | null {
-  if (!s.value) return null;
-  return /^\d{4}-\d{2}-\d{2}$/.test(s.value) ? s.value : null;
-}
-
-export function buildInvoice(result: ExtractionResult) {
-  const fields: InvoiceFields = {};
-  for (const name of fieldNames) fields[name] = fieldMetaFrom(name, result.fields[name]);
-
-  const lineItems = result.lineItems.map((li, idx) => {
-    const meta: LineItemMeta = {
-      description: fieldMetaFrom(`lineItems.${idx}.description`, li.description),
-      quantity: fieldMetaFrom(`lineItems.${idx}.quantity`, li.quantity),
-      unitPrice: fieldMetaFrom(`lineItems.${idx}.unitPrice`, li.unitPrice),
-      amount: fieldMetaFrom(`lineItems.${idx}.amount`, li.amount),
-    };
-    return {
-      idx,
-      description: li.description.value,
-      quantity: li.quantity.value ? parseMoney(li.quantity.value)?.replace(/(\.\d{2})$/, "$100") ?? null : null,
-      unitPrice: li.unitPrice.value ? parseMoney(li.unitPrice.value)?.replace(/(\.\d{2})$/, "$100") ?? null : null,
-      amount: money(li.amount),
-      meta,
-    };
-  });
-
-  const vendorName = result.fields.vendorName.value;
-  const header = {
-    vendorName,
-    vendorKey: vendorName ? vendorKey(vendorName) : null,
-    invoiceNumber: result.fields.invoiceNumber.value,
-    issueDate: isoDate(result.fields.issueDate),
-    dueDate: isoDate(result.fields.dueDate),
-    currency: result.fields.currency.value?.toUpperCase() ?? null,
-    subtotal: money(result.fields.subtotal),
-    tax: money(result.fields.tax),
-    shipping: money(result.fields.shipping),
-    discount: money(result.fields.discount),
-    total: money(result.fields.total),
-  };
-  // A money value the model returned but we could not parse is a guaranteed review item.
-  for (const f of MONEY_FIELDS) {
-    if (result.fields[f].value && header[f] === null) fields[f].risk = 1;
-  }
-
-  return { header, fields, lineItems };
-}
+import { loadExtraction, loadGrounding, loadIssues } from "./shared";
 
 export const finaliseStage: Stage = {
   name: "finalise",
   async run(ctx) {
-    const result = ctx.state.extraction ?? (await extractionsRepo.latest(ctx.documentId))?.result;
-    if (!result) throw new StageError("no_extraction", "No extraction is available for this document.");
-    const docType = result.docType.value === "other" ? "invoice" : result.docType.value;
-    const built = buildInvoice(result);
+    const extraction = await loadExtraction(ctx);
+    const grounding = await loadGrounding(ctx);
+    const issues = await loadIssues(ctx);
+    const built = buildInvoice(extraction, { grounding, issues });
+    // The extract stage halts the pipeline as soon as it classifies a document as "other" (see
+    // extract.ts), so finalise can never actually observe it; the throw documents that invariant
+    // instead of silently coercing an unreachable case to "invoice".
+    const docType = extraction.docType.value;
+    if (docType === "other") {
+      throw new StageError("not_an_invoice", "This document is not an invoice.", undefined, { retryable: false });
+    }
     await invoicesRepo.upsertFromExtraction({
       documentId: ctx.documentId,
       workspaceId: ctx.workspaceId,
@@ -93,8 +27,17 @@ export const finaliseStage: Stage = {
       header: built.header,
       fields: built.fields,
       lineItems: built.lineItems,
+      searchText: searchTextFor(built),
     });
     await documentsRepo.setStatus(ctx.documentId, "needs_review");
-    return { meta: { fields: Object.keys(built.fields).length, lineItems: built.lineItems.length } };
+    const allMeta = [...Object.values(built.fields), ...built.lineItems.flatMap((li) => Object.values(li.meta))];
+    return {
+      meta: {
+        fields: Object.keys(built.fields).length,
+        lineItems: built.lineItems.length,
+        highRisk: allMeta.filter((m) => m && riskBand(m.risk) === "high").length,
+        blockingIssues: issues.filter((i) => i.severity === "blocking").length,
+      },
+    };
   },
 };

@@ -1,10 +1,14 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { ModelInput, ModelProvider, ModelUsage } from "@/lib/pipeline/types";
+import type { ExtractOptions, ModelInput, ModelProvider, ModelUsage } from "@/lib/pipeline/types";
 import { groundTruthSchema, manifestSchema, type GroundTruth } from "./ground-truth";
+import { readRecording, RECORDINGS_DIR } from "./recordings";
+import { kindFor } from "./replay-provider";
 import { extractionResultSchema, fieldNames, type ExtractionResult } from "./schema";
 
 export type GroundTruthLookup = (sha256: string) => Promise<GroundTruth | null>;
+
+export const MOCK_PROMPT_VERSION = "mock-1";
 
 const SAMPLES_DIR = path.join(process.cwd(), "samples");
 
@@ -57,24 +61,60 @@ export function groundTruthToExtraction(gt: GroundTruth): ExtractionResult {
 
 export class MockModelProvider implements ModelProvider {
   readonly name = "mock";
-  constructor(private readonly lookup: GroundTruthLookup = manifestLookup) {}
+  /**
+   * Recordings are consulted only for the default manifest lookup. An injected lookup is a test
+   * fixture built to say something specific about a sample, and a recording for that same sample
+   * hash would silently discard it.
+   */
+  private readonly useRecordings: boolean;
 
-  async extract(input: ModelInput) {
+  constructor(private readonly lookup: GroundTruthLookup = manifestLookup, private readonly dir: string = RECORDINGS_DIR) {
+    this.useRecordings = lookup === manifestLookup;
+  }
+
+  /** The mock never calls an API, so nothing it answers costs money. */
+  async isFree(): Promise<boolean> {
+    return true;
+  }
+
+  /**
+   * A recorded live answer for this file hash wins over the hand-written ground truth, so the
+   * offline demo shows what the model actually said. A reconcile with no recording falls back to
+   * the ground truth, which is the same answer the first look gave, so a mock second look is never
+   * "better" and is never adopted.
+   */
+  async extract(input: ModelInput, options?: ExtractOptions) {
     const started = Date.now();
-    const gt = await this.lookup(input.sha256);
-    const result: ExtractionResult = gt
-      ? groundTruthToExtraction(gt)
-      : extractionResultSchema.parse({
-          docType: {
-            value: "other",
-            confidence: 1,
-            reason: "Mock mode only recognises the bundled sample documents. Set ANTHROPIC_API_KEY to extract your own files.",
-          },
-          fields: Object.fromEntries(fieldNames.map((f) => [f, { value: null, sourceText: null, page: null, confidence: 1 }])),
-          lineItems: [],
-          notes: null,
-        });
-    const usage: ModelUsage = { model: "mock", inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, latencyMs: Date.now() - started };
-    return { result, usage, raw: { source: gt ? "ground-truth" : "unknown", sha256: input.sha256 } };
+    const rec = this.useRecordings ? await readRecording(input.sha256, kindFor(options), this.dir) : null;
+    const gt = rec ? null : await this.lookup(input.sha256);
+    const result: ExtractionResult = rec
+      ? rec.result
+      : gt
+        ? groundTruthToExtraction(gt)
+        : extractionResultSchema.parse({
+            docType: {
+              value: "other",
+              confidence: 1,
+              reason: "Mock mode only recognises the bundled sample documents. Set ANTHROPIC_API_KEY to extract your own files.",
+            },
+            fields: Object.fromEntries(fieldNames.map((f) => [f, { value: null, sourceText: null, page: null, confidence: 1 }])),
+            lineItems: [],
+            notes: null,
+          });
+    const usage: ModelUsage = {
+      model: "mock",
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+      latencyMs: Date.now() - started,
+      costMicros: 0,
+    };
+    return {
+      result,
+      usage,
+      raw: { source: rec ? "recording" : gt ? "ground-truth" : "unknown", sha256: input.sha256, recordedModel: rec?.model ?? null },
+      promptVersion: rec ? rec.promptVersion : MOCK_PROMPT_VERSION,
+    };
   }
 }

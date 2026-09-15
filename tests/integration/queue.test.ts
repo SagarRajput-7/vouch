@@ -4,6 +4,7 @@ import { startGuestSession } from "@/lib/auth/session";
 import { dbFlavour, getDb } from "@/lib/db/client";
 import { documentsRepo } from "@/lib/repo/documents";
 import { jobsRepo } from "@/lib/repo/jobs";
+import { pipelineRunsRepo } from "@/lib/repo/pipeline-runs";
 import { JOB_LIMITS, claimJobs, sweepStale } from "@/lib/queue/claim";
 
 async function docInNewWorkspace() {
@@ -82,6 +83,26 @@ describe("job queue", () => {
     const swept = await sweepStale(JOB_LIMITS.staleMs);
     expect(swept).toBeGreaterThanOrEqual(1);
     expect((await jobsRepo.getById(job.id))?.status).toBe("queued");
+  });
+
+  it("closes the stage runs of a job that will not come back, and keeps those of one that will", async () => {
+    const a = await docInNewWorkspace();
+    const dead = await jobsRepo.enqueue({ ...a, kind: "process_document" });
+    const retrying = await jobsRepo.enqueue({ ...a, kind: "process_document" });
+    const deadRun = await pipelineRunsRepo.start(a.documentId, "extract", dead.id);
+    const retryingRun = await pipelineRunsRepo.start(a.documentId, "parse", retrying.id);
+    await getDb().execute(sql`update pipeline_runs set started_at = now() - interval '10 minutes' where id in (${deadRun.id}, ${retryingRun.id})`);
+    await getDb().execute(sql`update jobs set status = 'dead' where id = ${dead.id}`);
+    await getDb().execute(sql`update jobs set status = 'queued' where id = ${retrying.id}`);
+
+    await sweepStale(JOB_LIMITS.staleMs);
+
+    const runs = await pipelineRunsRepo.listByDocument(a.documentId);
+    expect(runs.find((r) => r.id === deadRun.id)).toMatchObject({ status: "failed", error: "stale" });
+    expect(runs.find((r) => r.id === deadRun.id)?.finishedAt).not.toBeNull();
+    // The retrying job's own run is the marker the extract stage needs to recognise work it has
+    // already paid for, so a sweep must not take it away while that job can still resume.
+    expect(runs.find((r) => r.id === retryingRun.id)?.status).toBe("running");
   });
 
   it.skipIf(dbFlavour() === "pglite")("never double-claims under concurrency", async () => {
