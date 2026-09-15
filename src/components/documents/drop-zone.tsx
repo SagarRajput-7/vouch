@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 const ACCEPT = "application/pdf,image/png,image/jpeg";
 const MAX_FILES = 5;
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = 4 * 1024 * 1024;
 
 export type LocalRejection = { filename: string; message: string };
 
@@ -19,7 +19,7 @@ export function splitFiles(list: File[]): { ok: File[]; rejected: LocalRejection
   const ok: File[] = [];
   const rejected: LocalRejection[] = [];
   for (const f of list.slice(0, MAX_FILES)) {
-    if (f.size > MAX_BYTES) rejected.push({ filename: f.name, message: "Larger than 10 MB." });
+    if (f.size > MAX_BYTES) rejected.push({ filename: f.name, message: "Larger than 4 MB." });
     else ok.push(f);
   }
   for (const f of list.slice(MAX_FILES)) rejected.push({ filename: f.name, message: "More than 5 files at once." });
@@ -67,7 +67,7 @@ export function DropZone({ onFiles, busy }: Props) {
         Choose files
       </Button>
       <p id={hintId} className="mt-3 font-mono text-xs text-muted-foreground">
-        PDF, PNG or JPEG. Up to 5 files, 10 MB each.
+        PDF, PNG or JPEG. Up to 5 files, 4 MB each.
       </p>
       <input
         ref={inputRef}

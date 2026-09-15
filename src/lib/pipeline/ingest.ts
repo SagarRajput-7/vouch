@@ -7,7 +7,7 @@ import { documentsRepo, type Document } from "@/lib/repo/documents";
 import { jobsRepo, type Job } from "@/lib/repo/jobs";
 
 export const LIMITS = {
-  maxFileBytes: 10 * 1024 * 1024,
+  maxFileBytes: 4 * 1024 * 1024,
   maxFilesPerRequest: 5,
   maxDocumentsPerWorkspace: 25,
 } as const;
@@ -26,7 +26,7 @@ export async function ingestFile(input: {
   const filename = sanitizeFilename(input.filename);
   if (input.bytes.length === 0) return { kind: "rejected", filename, code: "empty", message: "The file is empty." };
   if (input.bytes.length > LIMITS.maxFileBytes) {
-    return { kind: "rejected", filename, code: "too_large", message: "Files must be 10 MB or smaller." };
+    return { kind: "rejected", filename, code: "too_large", message: "Files must be 4 MB or smaller." };
   }
   const mime = detectFileType(input.bytes);
   if (!mime) {

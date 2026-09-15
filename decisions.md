@@ -235,3 +235,10 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** Rely on the outer application-level retry logic to tolerate a rare double claim instead of closing the gap in the query itself.
 **Reasoning.** The `candidate` CTE selected rows by id membership from `ranked` and locked them with `FOR UPDATE SKIP LOCKED`, and the final `UPDATE ... FROM candidate WHERE jobs.id = candidate.id` wrote them, but neither clause re-checked `status = 'queued'`. If a competing claimer commits a claim on a row between this statement's snapshot and its own lock attempt, Postgres's EvalPlanQual re-evaluation re-checks only id membership, not status, so an already-claimed row could be claimed a second time. A double claim means a double model call once the live extraction provider lands, a real cost against a fixed daily budget, not just a wasted `runJob` invocation, and the fix is two words in each of two places.
 **Cut.** Nothing. This closes a real gap at negligible cost.
+
+## 2026-09-15: Cap uploads at 4 MB rather than 10 MB
+
+**Decision.** The per-file upload limit drops from 10 MB to 4 MB: `LIMITS.maxFileBytes` in `src/lib/pipeline/ingest.ts`, `MAX_BYTES` in `src/components/documents/drop-zone.tsx`, and their matching rejection and hint copy.
+**Alternatives.** Keep 10 MB and accept the platform-level 413 a larger file would hit; move to client-direct Vercel Blob uploads now, which bypass the function body limit entirely.
+**Reasoning.** Vercel Functions cap request bodies at 4.5 MB regardless of what the app enforces, so a 10 MB cap was never actually reachable in production and would fail with an unhelpful platform error rather than the app's own message.
+**Cut.** Supporting files above 4 MB until client-direct upload is built, which is scoped into the pipeline plan rather than done here.
