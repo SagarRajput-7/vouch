@@ -8,11 +8,35 @@
     "kind": "pdf_text"
   },
   {
+    "name": "euro-format",
+    "file": "euro-format.pdf",
+    "mime": "application/pdf",
+    "sha256": "25c5e15bdfd38db5e954c0f24f6de70dbfbe19484250da86dc23e09fc5c6bec4",
+    "pages": 1,
+    "kind": "pdf_text"
+  },
+  {
+    "name": "injection",
+    "file": "injection.pdf",
+    "mime": "application/pdf",
+    "sha256": "066ea3e9783bdeba950555c6202cfe0dec917a49d36d616b1670821ab5de56c7",
+    "pages": 1,
+    "kind": "pdf_text"
+  },
+  {
     "name": "mismatch-total",
     "file": "mismatch-total.pdf",
     "mime": "application/pdf",
     "sha256": "60d0382b17c1cd98ed90ee34f281592a590e0ae949d402fb2854031dedfabd36",
     "pages": 1,
+    "kind": "pdf_text"
+  },
+  {
+    "name": "multipage-lineitems",
+    "file": "multipage-lineitems.pdf",
+    "mime": "application/pdf",
+    "sha256": "30cf2f030b09c23569cf8596e8ed670b8b10ed2c7297523d5aa9eb9fa6996330",
+    "pages": 3,
     "kind": "pdf_text"
   },
   {
@@ -22,5 +46,21 @@
     "sha256": "97a499fcbce10ee86829add01fa319f17808662a3b4533dd94cdbc313d88005b",
     "pages": 1,
     "kind": "pdf_text"
+  },
+  {
+    "name": "scan-lowres",
+    "file": "scan-lowres.pdf",
+    "mime": "application/pdf",
+    "sha256": "186d8a8173dfee9f786535152f649f3895bfb4224e535bcfb4808bd6fd95795b",
+    "pages": 1,
+    "kind": "pdf_scan"
+  },
+  {
+    "name": "scan-photo",
+    "file": "scan-photo.jpg",
+    "mime": "image/jpeg",
+    "sha256": "d24da38e68abe4e7982b0eb60fd829d554b4e2dc0e15f8acfafe5d7edb32f430",
+    "pages": 1,
+    "kind": "image"
   }
 ]

@@ -1,0 +1,23 @@
+{
+  "name": "euro-format",
+  "docType": "invoice",
+  "fields": {
+    "vendorName": { "value": "Nordlicht Werkzeugbau GmbH", "page": 1 },
+    "invoiceNumber": { "value": "RE-2026-01187", "page": 1 },
+    "issueDate": { "value": "2026-08-03", "display": "03.08.2026", "page": 1 },
+    "dueDate": { "value": "2026-08-17", "display": "17.08.2026", "page": 1 },
+    "currency": { "value": "EUR", "page": 1 },
+    "subtotal": { "value": "1000.00", "display": "1.000,00 €", "page": 1 },
+    "tax": { "value": "190.00", "display": "190,00 €", "page": 1 },
+    "shipping": null,
+    "discount": null,
+    "total": { "value": "1190.00", "display": "1.190,00 €", "page": 1 }
+  },
+  "lineItems": [
+    { "description": "Präzisionsfräser 12 mm, Hartmetall", "quantity": "4", "unitPrice": "185.50", "amount": "742.00", "display": { "unitPrice": "185,50", "amount": "742,00" } },
+    { "description": "Spannzange ER32", "quantity": "10", "unitPrice": "23.90", "amount": "239.00", "display": { "unitPrice": "23,90", "amount": "239,00" } },
+    { "description": "Versand und Verpackung", "quantity": "1", "unitPrice": "19.00", "amount": "19.00", "display": { "unitPrice": "19,00", "amount": "19,00" } }
+  ],
+  "expectedIssues": [],
+  "notes": "German invoice: day-first dotted dates, decimal commas, dot thousands separator, euro sign after the amount."
+}
