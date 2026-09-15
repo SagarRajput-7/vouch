@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { documents, invoices, lineItems, type InvoiceFields, type LineItemMeta } from "@/lib/db/schema";
 
@@ -12,12 +12,15 @@ export type UpsertInvoiceInput = {
   header: Pick<Invoice, "vendorName" | "vendorKey" | "invoiceNumber" | "issueDate" | "dueDate" | "currency" | "subtotal" | "tax" | "shipping" | "discount" | "total">;
   fields: InvoiceFields;
   lineItems: Array<{ idx: number; description: string | null; quantity: string | null; unitPrice: string | null; amount: string | null; meta: LineItemMeta }>;
+  /** Free text the ledger search indexes: vendor, invoice number, currency and line descriptions. */
+  searchText: string;
 };
 
 export const invoicesRepo = {
   async upsertFromExtraction(input: UpsertInvoiceInput): Promise<void> {
     const db = getDb();
     await db.transaction(async (tx) => {
+      const search = sql`to_tsvector('simple', ${input.searchText})`;
       await tx
         .insert(invoices)
         .values({
@@ -26,11 +29,12 @@ export const invoicesRepo = {
           docType: input.docType,
           ...input.header,
           fields: input.fields,
+          search,
           updatedAt: new Date(),
         })
         .onConflictDoUpdate({
           target: invoices.documentId,
-          set: { docType: input.docType, ...input.header, fields: input.fields, updatedAt: new Date() },
+          set: { docType: input.docType, ...input.header, fields: input.fields, search, updatedAt: new Date() },
         });
       await tx.delete(lineItems).where(eq(lineItems.documentId, input.documentId));
       if (input.lineItems.length > 0) {

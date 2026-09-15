@@ -2,24 +2,38 @@ import type { FieldMeta, InvoiceFields, LineItemMeta } from "@/lib/db/schema";
 import { parseDecimal, parseMoney } from "@/lib/normalize/money";
 import { vendorKey } from "@/lib/normalize/vendor";
 import { fieldNames, type ExtractedScalar, type ExtractionResult } from "@/lib/pipeline/extract/schema";
+import type { GroundingMap } from "@/lib/pipeline/ground/extraction";
 import { computeRisk, criticalityFor } from "@/lib/pipeline/risk";
+import type { Grounding, IssueDraft } from "@/lib/pipeline/types";
 
 const MONEY_FIELDS = ["subtotal", "tax", "shipping", "discount", "total"] as const;
 
-/** Field metadata before grounding runs: no location, so risk reflects only confidence and criticality. */
-export function fieldMetaFrom(path: string, s: ExtractedScalar): FieldMeta {
+export type IssueCounts = { blocking: number; warning: number };
+export type BuildOptions = { grounding?: GroundingMap; issues?: IssueDraft[] };
+
+/**
+ * Field metadata the review screen renders. A null value has nothing to locate, so its
+ * grounding counts as complete; the risk then comes only from issues naming the field.
+ */
+export function fieldMetaFrom(path: string, s: ExtractedScalar, g: Grounding | null, counts: IssueCounts): FieldMeta {
+  const groundingScore = s.value === null ? 1 : (g?.groundingScore ?? 0);
   return {
     value: s.value,
     sourceText: s.sourceText,
-    page: s.page,
-    bbox: null,
-    groundingScore: 0,
-    groundingMethod: "none",
+    page: g?.page ?? s.page,
+    bbox: g?.bbox ?? null,
+    groundingScore: s.value === null ? 0 : groundingScore,
+    groundingMethod: g?.groundingMethod ?? "none",
     modelConfidence: s.confidence,
-    risk: computeRisk({ groundingScore: 0, blockingIssues: 0, warningIssues: 0, modelConfidence: s.confidence, criticality: criticalityFor(path) }),
+    risk: computeRisk({ groundingScore, blockingIssues: counts.blocking, warningIssues: counts.warning, modelConfidence: s.confidence, criticality: criticalityFor(path) }),
     status: "pending",
     correctedAt: null,
   };
+}
+
+function countsFor(path: string, issues: IssueDraft[]): IssueCounts {
+  const mine = issues.filter((i) => i.fieldPaths.includes(path));
+  return { blocking: mine.filter((i) => i.severity === "blocking").length, warning: mine.filter((i) => i.severity === "warning").length };
 }
 
 function money(s: ExtractedScalar): string | null {
@@ -31,16 +45,20 @@ function isoDate(s: ExtractedScalar): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(s.value) ? s.value : null;
 }
 
-export function buildInvoice(result: ExtractionResult) {
+export function buildInvoice(result: ExtractionResult, opts: BuildOptions = {}) {
+  const grounding = opts.grounding ?? {};
+  const issues = opts.issues ?? [];
+  const metaFor = (path: string, s: ExtractedScalar) => fieldMetaFrom(path, s, grounding[path] ?? null, countsFor(path, issues));
+
   const fields: InvoiceFields = {};
-  for (const name of fieldNames) fields[name] = fieldMetaFrom(name, result.fields[name]);
+  for (const name of fieldNames) fields[name] = metaFor(name, result.fields[name]);
 
   const lineItems = result.lineItems.map((li, idx) => {
     const meta: LineItemMeta = {
-      description: fieldMetaFrom(`lineItems.${idx}.description`, li.description),
-      quantity: fieldMetaFrom(`lineItems.${idx}.quantity`, li.quantity),
-      unitPrice: fieldMetaFrom(`lineItems.${idx}.unitPrice`, li.unitPrice),
-      amount: fieldMetaFrom(`lineItems.${idx}.amount`, li.amount),
+      description: metaFor(`lineItems.${idx}.description`, li.description),
+      quantity: metaFor(`lineItems.${idx}.quantity`, li.quantity),
+      unitPrice: metaFor(`lineItems.${idx}.unitPrice`, li.unitPrice),
+      amount: metaFor(`lineItems.${idx}.amount`, li.amount),
     };
     return {
       idx,
@@ -77,3 +95,8 @@ export function buildInvoice(result: ExtractionResult) {
 }
 
 export type InvoiceDraft = ReturnType<typeof buildInvoice>;
+
+/** What the ledger search indexes: vendor, number, currency, and line descriptions. */
+export function searchTextFor(draft: InvoiceDraft): string {
+  return [draft.header.vendorName, draft.header.invoiceNumber, draft.header.currency, ...draft.lineItems.map((li) => li.description)].filter(Boolean).join(" ");
+}

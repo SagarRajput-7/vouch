@@ -68,6 +68,7 @@ describe("validate stage", () => {
       header: { vendorName: "Halcyon Cloud Services Inc.", vendorKey: "halcyon cloud services", invoiceNumber: "HCS-2026-0417", issueDate: null, dueDate: null, currency: "USD", subtotal: null, tax: null, shipping: null, discount: null, total: "1764.48" },
       fields: {},
       lineItems: [],
+      searchText: "Halcyon Cloud Services Inc. HCS-2026-0417",
     });
     // Same bytes cannot be uploaded twice into one workspace, so the second document is the
     // mismatch sample with its extraction forced to the clean sample's vendor and number.

@@ -3,12 +3,16 @@ import { BudgetExceededError, nextUtcMidnight } from "@/lib/pipeline/budget";
 import { StageError, toFailure } from "@/lib/pipeline/errors";
 import { extractStage } from "@/lib/pipeline/stages/extract";
 import { finaliseStage } from "@/lib/pipeline/stages/finalise";
+import { groundStage } from "@/lib/pipeline/stages/ground";
+import { parseStage } from "@/lib/pipeline/stages/parse";
+import { reconcileStage } from "@/lib/pipeline/stages/reconcile";
+import { validateStage } from "@/lib/pipeline/stages/validate";
 import type { Stage, StageContext } from "@/lib/pipeline/types";
 import { documentsRepo } from "@/lib/repo/documents";
 import { jobsRepo, type Job } from "@/lib/repo/jobs";
 import { pipelineRunsRepo } from "@/lib/repo/pipeline-runs";
 
-export const STAGES: Stage[] = [extractStage, finaliseStage];
+export const STAGES: Stage[] = [parseStage, extractStage, groundStage, validateStage, reconcileStage, finaliseStage];
 
 export async function runJob(job: Job, stages: Stage[] = STAGES): Promise<void> {
   if (!job.documentId) {

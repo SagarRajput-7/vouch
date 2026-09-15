@@ -8,6 +8,9 @@ function isHydrationIssue(text: string): boolean {
 
 test.describe("dashboard", () => {
   test("bootstraps a guest, loads samples, and shows processing results", async ({ page }) => {
+    // The eight samples include a phone photo and a low-resolution scan, both of which go
+    // through OCR inside the dev server. The config's 90 s default is not enough for that.
+    test.setTimeout(300_000);
     const consoleIssues: string[] = [];
     page.on("console", (msg) => {
       const type = msg.type();
@@ -18,16 +21,19 @@ test.describe("dashboard", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Documents" })).toBeVisible();
 
     await page.getByRole("button", { name: "Load sample invoices" }).click();
-    const rows = page.getByRole("row").filter({ hasText: ".pdf" });
-    await expect(rows).toHaveCount(3);
+    // Seven PDFs and one JPEG. The extension is not anchored with `$`: a row's text runs on
+    // past the filename cell through status, size, date and the action buttons. Scoping to
+    // `row` is what keeps the live announcer out of this count, not the pattern.
+    const rows = page.getByRole("row").filter({ hasText: /\.(pdf|jpg)/ });
+    await expect(rows).toHaveCount(8);
 
     // Scoped to the table: the live announcer's polite region keeps the text of the last
     // status-change announcement (e.g. "mismatch-total.pdf: Needs review") sitting in the DOM,
     // off-screen but not `display:none`, until the next announcement replaces it. An unscoped
     // page.getByText("Needs review") matches that leftover text too and intermittently counts
-    // 3 instead of 2. See decisions.md, 2026-09-15.
+    // one more than the table holds. See decisions.md, 2026-09-15.
     const table = page.getByRole("table");
-    await expect(table.getByText("Needs review")).toHaveCount(2, { timeout: 60_000 });
+    await expect(table.getByText("Needs review")).toHaveCount(7, { timeout: 240_000 });
     await expect(table.getByText("Rejected")).toHaveCount(1);
     await expect(page.getByText("This document is not an invoice.")).toBeVisible();
 
@@ -46,6 +52,8 @@ test.describe("dashboard", () => {
   });
 
   test("has no accessibility violations", async ({ page }) => {
+    // Loads the same eight samples, two of them through OCR: well past the 90 s default.
+    test.setTimeout(300_000);
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
@@ -57,7 +65,7 @@ test.describe("dashboard", () => {
     await page.getByRole("button", { name: "Load sample invoices" }).click();
     // Scoped to the table for the same reason as the first test: an unscoped match can also
     // hit the live announcer's leftover status text. See decisions.md, 2026-09-15.
-    await expect(page.getByRole("table").getByText("Needs review")).toHaveCount(2, { timeout: 60_000 });
+    await expect(page.getByRole("table").getByText("Needs review")).toHaveCount(7, { timeout: 240_000 });
     const populatedResults = await new AxeBuilder({ page }).analyze();
     expect(populatedResults.violations).toEqual([]);
 

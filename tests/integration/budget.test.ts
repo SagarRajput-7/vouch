@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { startGuestSession } from "@/lib/auth/session";
 import { getBlobStore } from "@/lib/blob";
@@ -22,9 +24,12 @@ beforeEach(async () => {
 
 afterEach(() => setModelProviderForTests(null));
 
+// Real sample bytes, not a stub: parse now runs ahead of extract, and these guard rails are
+// all about what the runner does when the extract stage refuses, pauses or fails. Each test
+// seeds its own workspace, so the same file can be used by all of them.
 async function seed(name: string) {
   const { info } = await startGuestSession();
-  const bytes = new TextEncoder().encode(`%PDF-1.4 ${name}`);
+  const bytes = new Uint8Array(await readFile(path.resolve("samples/out", "clean-digital.pdf")));
   const sha = sha256Hex(bytes);
   const blobKey = `${info.workspaceId}/${sha}.pdf`;
   await getBlobStore().put(blobKey, bytes, "application/pdf");
