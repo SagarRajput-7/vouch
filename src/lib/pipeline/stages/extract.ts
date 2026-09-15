@@ -3,7 +3,7 @@ import type { SupportedMime } from "@/lib/files/detect-type";
 import { assertWithinBudget } from "@/lib/pipeline/budget";
 import { StageError } from "@/lib/pipeline/errors";
 import { getModelProvider } from "@/lib/pipeline/extract/model";
-import { PROMPT_VERSION } from "@/lib/pipeline/extract/schema";
+import { PROMPT_VERSION } from "@/lib/pipeline/extract/prompt";
 import type { Stage } from "@/lib/pipeline/types";
 import { documentsRepo } from "@/lib/repo/documents";
 import { extractionsRepo } from "@/lib/repo/extractions";
