@@ -263,3 +263,10 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** Fail the job; reject uploads when over budget; a per-workspace budget.
 **Reasoning.** The cap protects a personal card, not a product tier. A pause that resumes on its own is honest to the person who uploaded and needs no operator action. Samples cost nothing, so the demo stays explorable.
 **Cut.** Per-workspace budgets. A single global cap is what the deployment needs.
+
+## 2026-09-15: OCR runs in-process with Tesseract, language data cached at runtime
+
+**Decision.** Image-only PDF pages are rasterised with pdf.js and a Node canvas, then read by tesseract.js in the same function invocation, capped at five pages and 25 seconds per page. The English language data is downloaded on first use and cached under a writable directory (`/tmp/tessdata` on Vercel), never committed.
+**Alternatives.** A hosted OCR API; asking the model for word boxes; committing the traineddata file.
+**Reasoning.** Grounding needs word boxes the model does not return, and a second paid service adds a key and a bill for a reviewer to set up. Tesseract is free, deterministic, and good enough on office scans; the caps keep a single job inside the function's time limit. Committing 10 MB of language data would bloat every clone for a file a CDN serves in a second.
+**Cut.** OCR beyond five pages per document and non-English language packs.

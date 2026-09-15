@@ -37,6 +37,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with: { path: .data/tessdata, key: tessdata-eng-v1 }
       - run: pnpm test
   e2e:
     runs-on: ubuntu-latest

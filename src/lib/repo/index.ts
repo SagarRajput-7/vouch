@@ -1,5 +1,6 @@
 export { workspacesRepo } from "./workspaces";
 export { documentsRepo } from "./documents";
+export { pagesRepo } from "./pages";
 export { pipelineRunsRepo } from "./pipeline-runs";
 export { auditRepo } from "./audit";
 export { jobsRepo } from "./jobs";
