@@ -5,9 +5,12 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { startGuestSession } from "@/lib/auth/session";
 import { getBlobStore } from "@/lib/blob";
+import { getDb } from "@/lib/db/client";
+import { usageLedger } from "@/lib/db/schema";
 import { sha256Hex } from "@/lib/files/hash";
 import { setModelProviderForTests } from "@/lib/pipeline/extract/model";
 import { manifestLookup, MockModelProvider } from "@/lib/pipeline/extract/mock-provider";
@@ -25,6 +28,7 @@ import { invoicesRepo } from "@/lib/repo/invoices";
 import { issuesRepo } from "@/lib/repo/issues";
 import { jobsRepo } from "@/lib/repo/jobs";
 import { pipelineRunsRepo } from "@/lib/repo/pipeline-runs";
+import { usageRepo } from "@/lib/repo/usage";
 
 const STAGES = [parseStage, extractStage, groundStage, validateStage, reconcileStage];
 
@@ -65,6 +69,13 @@ function twoStepProvider(
 function withoutTax(truth: ExtractionResult): ExtractionResult {
   return { ...truth, fields: { ...truth.fields, tax: { ...truth.fields.tax, value: null, sourceText: null, page: null } } };
 }
+
+// The daily cap sums the whole usage_ledger table, a single global budget rather than a
+// per-workspace one, so the row the budget test inserts to stand for today's spend must not still
+// be there when a later test in this file reaches its own check.
+beforeEach(async () => {
+  await getDb().delete(usageLedger);
+});
 
 afterEach(() => setModelProviderForTests(null));
 
@@ -109,11 +120,66 @@ describe("reconcile stage", () => {
     expect(await extractionsRepo.newestKind(doc.id)).toBe("reconcile");
     const runs = await pipelineRunsRepo.listByDocument(doc.id);
     expect(runs.find((r) => r.stage === "reconcile")?.meta).toMatchObject({ adopted: false, blockingBefore: 1, blockingAfter: 1 });
+    // The attempt was rejected but it was still bought, so the ledger carries it alongside the first.
+    const billed = await getDb().select().from(usageLedger).where(eq(usageLedger.documentId, doc.id));
+    expect(billed).toHaveLength(2);
+    expect(billed.some((r) => r.model === "claude-sonnet-5" && r.costMicros === 70)).toBe(true);
 
     // A fresh context, as after a crash and re-claim, must not spend another model call.
     const fresh = (await documentsRepo.getByIdUnscoped(doc.id))!;
     const out = await reconcileStage.run({ documentId: fresh.id, workspaceId: fresh.workspaceId, jobId: job.id, document: fresh, state: {} });
     expect(out.meta).toMatchObject({ skipped: "already_reconciled" });
     expect(provider.calls).toHaveLength(2);
+  });
+
+  it("does not adopt a second look that says the document is not an invoice", async () => {
+    const provider = twoStepProvider((r) => ({ ...r, docType: { ...r.docType, value: "other" as const, reason: "This looks like a delivery note." } }), withoutTax);
+    setModelProviderForTests(provider);
+    const { doc, job } = await seed("clean-digital");
+    await runJob(job, STAGES);
+    expect(provider.calls).toHaveLength(2);
+    // Fewer blocking issues, so only the docType guard can be what rejected this answer.
+    const runs = await pipelineRunsRepo.listByDocument(doc.id);
+    expect(runs.find((r) => r.stage === "reconcile")?.meta).toMatchObject({ adopted: false, blockingBefore: 1, blockingAfter: 0, docType: "other" });
+    expect((await issuesRepo.listByDocument(doc.id)).map((i) => i.code)).toEqual(["V003"]);
+    expect((await extractionsRepo.latest(doc.id))?.row.kind).toBe("initial");
+    expect((await documentsRepo.getByIdUnscoped(doc.id))?.docType).toBe("invoice");
+  });
+
+  it("repairs the issue set when an adopted second look was interrupted before its issues landed", async () => {
+    const provider = twoStepProvider((r) => r, withoutTax);
+    setModelProviderForTests(provider);
+    const { doc, job } = await seed("clean-digital");
+    await runJob(job, STAGES);
+    expect(await issuesRepo.listByDocument(doc.id)).toEqual([]);
+
+    // The adopted extraction row is written before the issues that belong to it. Put the document
+    // back in the state a crash in that gap would leave: the corrected values, the old issue set.
+    await issuesRepo.replaceForDocument(doc.id, [
+      { code: "V003", severity: "blocking", fieldPaths: ["total", "subtotal"], message: "The subtotal is 1630.00 but the total reads 1764.48.", suggestion: null },
+    ]);
+    const fresh = (await documentsRepo.getByIdUnscoped(doc.id))!;
+    const out = await reconcileStage.run({ documentId: fresh.id, workspaceId: fresh.workspaceId, jobId: job.id, document: fresh, state: {} });
+    expect(out.meta).toMatchObject({ skipped: "already_reconciled", repaired: true });
+    expect(await issuesRepo.listByDocument(doc.id)).toEqual([]);
+    // Repair reads the adopted row; it never buys a third answer.
+    expect(provider.calls).toHaveLength(2);
+  });
+
+  it("skips the second look instead of pausing the job when the daily budget is spent", async () => {
+    const provider = twoStepProvider((r) => r, withoutTax);
+    setModelProviderForTests(provider);
+    const { doc, job } = await seed("clean-digital");
+    // Extract runs first and must not itself pause, so the spend is recorded after it.
+    await runJob(job, [parseStage, extractStage, groundStage, validateStage]);
+    expect(provider.calls).toHaveLength(1);
+    await usageRepo.record({ workspaceId: doc.workspaceId, documentId: null, model: "claude-sonnet-5", inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costMicros: 3_000_000 });
+
+    const fresh = (await documentsRepo.getByIdUnscoped(doc.id))!;
+    const out = await reconcileStage.run({ documentId: fresh.id, workspaceId: fresh.workspaceId, jobId: job.id, document: fresh, state: {} });
+    expect(out.meta).toEqual({ skipped: "budget_paused" });
+    expect(provider.calls).toHaveLength(1);
+    // The blocking issue stays; a document nobody could improve is still a document to review.
+    expect((await issuesRepo.listByDocument(doc.id)).map((i) => i.code)).toEqual(["V003"]);
   });
 });
