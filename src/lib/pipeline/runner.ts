@@ -32,6 +32,10 @@ export async function runJob(job: Job, stages: Stage[] = STAGES): Promise<void> 
         await pipelineRunsRepo.finish(run.id, "succeeded", out.meta ?? {});
         if (out.halt) break;
       } catch (err) {
+        if (err instanceof BudgetExceededError) {
+          await pipelineRunsRepo.finish(run.id, "skipped", { reason: "budget_paused" });
+          throw err;
+        }
         await pipelineRunsRepo.finish(run.id, "failed", {}, errorMessage(err));
         throw err;
       }

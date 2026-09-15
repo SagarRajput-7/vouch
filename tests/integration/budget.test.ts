@@ -10,6 +10,7 @@ import { runJob } from "@/lib/pipeline/runner";
 import { claimJobs } from "@/lib/queue/claim";
 import { documentsRepo } from "@/lib/repo/documents";
 import { jobsRepo } from "@/lib/repo/jobs";
+import { pipelineRunsRepo } from "@/lib/repo/pipeline-runs";
 import { usageRepo } from "@/lib/repo/usage";
 
 // The daily budget sums the whole usage_ledger table (a single global cap, not per-workspace),
@@ -57,6 +58,10 @@ describe("runner guard rails", () => {
     expect(after?.status).toBe("queued");
     expect(after?.failureCode).toBe("budget_paused");
     expect(after?.failureMessage).toContain("resumes");
+    const runs = await pipelineRunsRepo.listByDocument(doc.id);
+    const extractRun = runs.find((r) => r.stage === "extract");
+    expect(extractRun?.status).toBe("skipped");
+    expect(extractRun?.meta).toEqual({ reason: "budget_paused" });
   });
 
   it("marks a non-retryable stage error dead on the first attempt with its plain message", async () => {
