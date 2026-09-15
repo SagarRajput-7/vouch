@@ -3,4 +3,5 @@ allowBuilds:
   better-sqlite3: false
   esbuild: true
   sharp: false
+  tesseract.js: true
   unrs-resolver: false

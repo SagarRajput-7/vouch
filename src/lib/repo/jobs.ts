@@ -1,4 +1,4 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { jobs } from "@/lib/db/schema";
 
@@ -39,12 +39,28 @@ export const jobsRepo = {
       .where(eq(jobs.id, id));
   },
 
-  /** Requeues with exponential backoff, or marks dead once attempts are exhausted. */
-  async fail(id: string, error: string): Promise<Job | null> {
+  /** Parks a job until a later time. The attempt the claim consumed is returned, so waiting costs nothing. */
+  async defer(id: string, runAfter: Date, note: string): Promise<void> {
+    await getDb()
+      .update(jobs)
+      .set({
+        status: "queued",
+        runAfter,
+        attempts: sql`greatest(${jobs.attempts} - 1, 0)`,
+        lastError: note.slice(0, 2000),
+        lockedAt: null,
+        lockedBy: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(jobs.id, id));
+  },
+
+  /** Requeues with exponential backoff, or marks dead once attempts are exhausted or the error is fatal. */
+  async fail(id: string, error: string, opts: { fatal?: boolean } = {}): Promise<Job | null> {
     const db = getDb();
     const job = await db.query.jobs.findFirst({ where: eq(jobs.id, id) });
     if (!job) return null;
-    const dead = job.attempts >= job.maxAttempts;
+    const dead = opts.fatal === true || job.attempts >= job.maxAttempts;
     const [row] = await db
       .update(jobs)
       .set({

@@ -1,5 +1,6 @@
 import { errorMessage, log } from "@/lib/logger";
-import { toFailure } from "@/lib/pipeline/errors";
+import { BudgetExceededError, nextUtcMidnight } from "@/lib/pipeline/budget";
+import { StageError, toFailure } from "@/lib/pipeline/errors";
 import { extractStage } from "@/lib/pipeline/stages/extract";
 import { finaliseStage } from "@/lib/pipeline/stages/finalise";
 import type { Stage, StageContext } from "@/lib/pipeline/types";
@@ -38,11 +39,19 @@ export async function runJob(job: Job, stages: Stage[] = STAGES): Promise<void> 
     await jobsRepo.complete(job.id);
     log.info("job.succeeded", { jobId: job.id, documentId: document.id });
   } catch (err) {
-    const failed = await jobsRepo.fail(job.id, errorMessage(err));
+    if (err instanceof BudgetExceededError) {
+      const resumeAt = nextUtcMidnight();
+      await jobsRepo.defer(job.id, resumeAt, err.message);
+      await documentsRepo.setStatus(document.id, "queued", { code: err.code, message: err.userMessage });
+      log.warn("job.deferred", { jobId: job.id, documentId: document.id, resumeAt: resumeAt.toISOString() });
+      return;
+    }
+    const fatal = err instanceof StageError && !err.retryable;
+    const failed = await jobsRepo.fail(job.id, errorMessage(err), { fatal });
     const failure = toFailure(err);
     if (failed?.status === "dead") {
       await documentsRepo.setStatus(document.id, "failed", failure);
-      log.error("job.dead", { jobId: job.id, documentId: document.id, error: errorMessage(err) });
+      log.error("job.dead", { jobId: job.id, documentId: document.id, fatal, error: errorMessage(err) });
     } else {
       await documentsRepo.setStatus(document.id, "queued");
       log.warn("job.retry", { jobId: job.id, documentId: document.id, attempts: failed?.attempts, error: errorMessage(err) });

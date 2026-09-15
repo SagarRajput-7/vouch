@@ -24,6 +24,7 @@ export const env = createEnv({
     CRON_SECRET: z.string().min(16).optional(),
     BUDGET_DAILY_USD: z.coerce.number().positive().default(3),
     UPLOADS_ENABLED: bool,
+    TESSDATA_CACHE_DIR: z.string().optional(),
   },
   client: {},
   runtimeEnv: {
@@ -41,6 +42,7 @@ export const env = createEnv({
     CRON_SECRET: process.env.CRON_SECRET,
     BUDGET_DAILY_USD: process.env.BUDGET_DAILY_USD,
     UPLOADS_ENABLED: process.env.UPLOADS_ENABLED,
+    TESSDATA_CACHE_DIR: process.env.TESSDATA_CACHE_DIR,
   },
   emptyStringAsUndefined: true,
   skipValidation: process.env.SKIP_ENV_VALIDATION === "true",

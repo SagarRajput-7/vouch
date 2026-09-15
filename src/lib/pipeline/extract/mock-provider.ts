@@ -74,7 +74,15 @@ export class MockModelProvider implements ModelProvider {
           lineItems: [],
           notes: null,
         });
-    const usage: ModelUsage = { model: "mock", inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, latencyMs: Date.now() - started };
+    const usage: ModelUsage = {
+      model: "mock",
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+      latencyMs: Date.now() - started,
+      costMicros: 0,
+    };
     return { result, usage, raw: { source: gt ? "ground-truth" : "unknown", sha256: input.sha256 } };
   }
 }

@@ -249,3 +249,24 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** Remove `packageManager` from `package.json` instead and keep the workflow's explicit version; pin an older `pnpm/action-setup` version that tolerated both being set.
 **Reasoning.** The very first push to GitHub failed all four jobs identically at the setup step: `pnpm/action-setup@v4` now refuses to run when both the workflow's `version` input and `package.json`'s `packageManager` field are set, calling it a version conflict, a behavior change this repo's local validation could not have caught since it only checks YAML syntax, never actually runs the action. `packageManager` is the source of truth other tools also read, so it stays and the redundant workflow input goes.
 **Cut.** Nothing of substance; this is a one-line-per-job configuration fix with no behavior change to what gets installed, since both inputs named the same version.
+
+## 2026-09-15: Official Anthropic SDK over the Vercel AI SDK
+
+**Decision.** Extraction calls Claude through `@anthropic-ai/sdk` directly: `messages.parse` with a zod output format, native PDF and image content blocks, explicit prompt caching, typed errors, and usage fields.
+**Alternatives.** The Vercel AI SDK with `@ai-sdk/anthropic`, which the design spec named.
+**Reasoning.** Vouch uses one model. The AI SDK's provider abstraction buys nothing here and adds a layer whose current API differs from training data, while the official SDK exposes structured outputs, cache controls, and stop reasons directly and is documented for the exact model in use.
+**Cut.** Provider portability. Swapping models later is a one-file change in the provider, which is acceptable.
+
+## 2026-09-15: A daily model budget that pauses instead of failing
+
+**Decision.** Before every live model call the extract stage sums today's spend from the usage ledger; at the cap the job is deferred to the next UTC midnight without consuming an attempt and the document shows "Daily model budget reached" while staying queued.
+**Alternatives.** Fail the job; reject uploads when over budget; a per-workspace budget.
+**Reasoning.** The cap protects a personal card, not a product tier. A pause that resumes on its own is honest to the person who uploaded and needs no operator action. Samples cost nothing, so the demo stays explorable.
+**Cut.** Per-workspace budgets. A single global cap is what the deployment needs.
+
+## 2026-09-15: `tests/integration/budget.test.ts` clears the usage ledger before each test
+
+**Decision.** Added `beforeEach(async () => { await getDb().delete(usageLedger); })` to `tests/integration/budget.test.ts`, importing `getDb` from `@/lib/db/client` and `usageLedger` from `@/lib/db/schema`, ahead of the two `it` blocks exactly as specified.
+**Alternatives.** Reorder the two tests so the fatal-error case (which never writes to the ledger) runs before the budget case; leave the tests in their given order and accept the failure.
+**Reasoning.** The daily budget is a single global sum across the whole `usage_ledger` table, not scoped per workspace (see the decision above), and the two tests share one PGlite instance for the file with no truncation between them. Run in the given order, the first test's `usageRepo.record({ ..., costMicros: 3_000_000 })`, inserted to force today's spend to exactly the cap, stays in the table when the second test runs moments later on the same real UTC day, so the second test's `extractStage` also sees the cap reached and defers instead of ever calling the "live" provider that throws the fatal `StageError`. Reproduced deterministically: the fatal test passes filtered alone (`vitest run ... -t "marks a non-retryable"`) but fails in the full file; fixed after adding the clear, confirmed on three consecutive full-file runs. Clearing the ledger before every test keeps both tests exactly as written and passing regardless of run order or what any other integration file previously wrote to the same global table.
+**Cut.** Reordering the two tests. It would also fix today's failure, since the fatal test alone never inserts usage, but leaves the same landmine for whoever adds a third test to this file later; clearing the shared table is the fix that actually matches why the tests interact.

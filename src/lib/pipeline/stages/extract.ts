@@ -1,5 +1,6 @@
 import { getBlobStore } from "@/lib/blob";
 import type { SupportedMime } from "@/lib/files/detect-type";
+import { assertWithinBudget } from "@/lib/pipeline/budget";
 import { StageError } from "@/lib/pipeline/errors";
 import { getModelProvider } from "@/lib/pipeline/extract/model";
 import { PROMPT_VERSION } from "@/lib/pipeline/extract/schema";
@@ -15,6 +16,7 @@ export const extractStage: Stage = {
     if (!blob) throw new StageError("blob_missing", "The stored file could not be read.");
 
     const provider = getModelProvider();
+    if (provider.name !== "mock") await assertWithinBudget();
     const { result, usage, raw } = await provider.extract({
       bytes: blob.bytes,
       mime: ctx.document.mime as SupportedMime,
@@ -41,7 +43,7 @@ export const extractStage: Stage = {
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       cacheReadTokens: usage.cacheReadTokens,
-      costMicros: 0,
+      costMicros: usage.costMicros,
     });
 
     if (result.docType.value === "other") {
