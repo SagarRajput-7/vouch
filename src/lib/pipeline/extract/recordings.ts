@@ -35,7 +35,14 @@ export async function readRecording(sha256: string, kind: Recording["kind"], dir
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw err;
   }
-  return recordingSchema.parse(JSON.parse(raw));
+  const rec = recordingSchema.parse(JSON.parse(raw));
+  // The filename is the only thing that ties a recording to a document. A file whose contents
+  // disagree with its name would replay one document's answer for another, so it is an error,
+  // not a miss to fall through on.
+  if (rec.sha256 !== sha256 || rec.kind !== kind) {
+    throw new Error(`Recording ${recordingFile(sha256, kind, dir)} holds ${rec.sha256}.${rec.kind}; refusing to replay it.`);
+  }
+  return rec;
 }
 
 export async function writeRecording(rec: Recording, dir: string = RECORDINGS_DIR): Promise<void> {

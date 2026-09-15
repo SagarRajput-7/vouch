@@ -3,7 +3,7 @@ import type { SupportedMime } from "@/lib/files/detect-type";
 import { assertWithinBudget } from "@/lib/pipeline/budget";
 import { StageError } from "@/lib/pipeline/errors";
 import { getModelProvider } from "@/lib/pipeline/extract/model";
-import type { ModelProvider, Stage } from "@/lib/pipeline/types";
+import type { ModelInput, ModelProvider, Stage } from "@/lib/pipeline/types";
 import { documentsRepo } from "@/lib/repo/documents";
 import { extractionsRepo } from "@/lib/repo/extractions";
 import { issuesRepo } from "@/lib/repo/issues";
@@ -16,16 +16,19 @@ export const extractStage: Stage = {
     if (!blob) throw new StageError("blob_missing", "The stored file could not be read.");
 
     const provider = getModelProvider();
-    if (provider.name !== "mock") await assertWithinBudget();
+    const input: ModelInput = {
+      bytes: blob.bytes,
+      mime: ctx.document.mime as SupportedMime,
+      sha256: ctx.document.sha256,
+      filename: ctx.document.originalFilename,
+    };
+    // A provider that can answer this exact call for free (the mock, or a replayed recording)
+    // spends nothing, so an exhausted daily budget must not stop it. Everything else pays.
+    if (!(await provider.isFree?.(input))) await assertWithinBudget();
 
     let extraction: Awaited<ReturnType<ModelProvider["extract"]>>;
     try {
-      extraction = await provider.extract({
-        bytes: blob.bytes,
-        mime: ctx.document.mime as SupportedMime,
-        sha256: ctx.document.sha256,
-        filename: ctx.document.originalFilename,
-      });
+      extraction = await provider.extract(input);
     } catch (err) {
       if (err instanceof StageError && err.usage) {
         await usageRepo.record({

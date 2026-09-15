@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -39,5 +39,12 @@ describe("recordings", () => {
     await writeRecording(rec, dir);
     expect(await readRecording(rec.sha256, "initial", dir)).toEqual(rec);
     expect(await readRecording(rec.sha256, "reconcile", dir)).toBeNull();
+  });
+  it("refuses a recording whose contents disagree with its filename", async () => {
+    const other = "b".repeat(64);
+    await writeFile(recordingFile(other, "initial", dir), JSON.stringify(rec));
+    await expect(readRecording(other, "initial", dir)).rejects.toThrow(/refusing to replay/);
+    await writeFile(recordingFile(other, "reconcile", dir), JSON.stringify({ ...rec, sha256: other }));
+    await expect(readRecording(other, "reconcile", dir)).rejects.toThrow(/refusing to replay/);
   });
 });

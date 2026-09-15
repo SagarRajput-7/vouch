@@ -1,8 +1,3 @@
-// The harness owns the only queue loop in the process. `scheduleDrain` reads this flag every time
-// it is called, so setting it before any ingest runs keeps a second, concurrent runner from
-// claiming the same jobs and interleaving its log lines with the report.
-process.env.VOUCH_DISABLE_AUTO_DRAIN = "true";
-
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { startGuestSession } from "../src/lib/auth/session";
@@ -14,16 +9,25 @@ import { claimJobs } from "../src/lib/queue/claim";
 
 export type Processed = { entry: Manifest[number]; documentId: string; workspaceId: string };
 
-/** Ingests every sample into one fresh workspace and runs the queue to completion. */
+const SAMPLES_ROOT = path.resolve("samples");
+
+export async function readManifest(): Promise<Manifest> {
+  return manifestSchema.parse(JSON.parse(await readFile(path.join(SAMPLES_ROOT, "manifest.json"), "utf8")));
+}
+
+/**
+ * Ingests every sample into one fresh workspace and runs the queue to completion. The scripts set
+ * VOUCH_DISABLE_AUTO_DRAIN so this claim loop is the only runner in the process: a background drain
+ * would race it for the same jobs and interleave its log lines with the report.
+ */
 export async function processSamples(filter?: (entry: Manifest[number]) => boolean): Promise<Processed[]> {
   await ensureDbReady();
   const { info } = await startGuestSession();
-  const root = path.resolve("samples");
-  const manifest = manifestSchema.parse(JSON.parse(await readFile(path.join(root, "manifest.json"), "utf8")));
+  const manifest = await readManifest();
   const processed: Processed[] = [];
   for (const entry of manifest) {
     if (filter && !filter(entry)) continue;
-    const bytes = new Uint8Array(await readFile(path.join(root, "out", entry.file)));
+    const bytes = new Uint8Array(await readFile(path.join(SAMPLES_ROOT, "out", entry.file)));
     const outcome = await ingestFile({ workspaceId: info.workspaceId, actorSessionId: "script", filename: entry.file, bytes });
     if (outcome.kind !== "accepted") throw new Error(`${entry.name}: ${outcome.kind}`);
     processed.push({ entry, documentId: outcome.document.id, workspaceId: info.workspaceId });

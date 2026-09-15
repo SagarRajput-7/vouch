@@ -20,6 +20,12 @@ export type ExtractOptions = { focus?: { fieldPaths: string[]; reason: string } 
 export interface ModelProvider {
   readonly name: string;
   extract(input: ModelInput, options?: ExtractOptions): Promise<{ result: ExtractionResult; usage: ModelUsage; raw: unknown; promptVersion: string }>;
+  /**
+   * True when this exact call will be answered without spending money, so the caller can skip the
+   * daily budget guard. A provider that omits it is assumed to cost money, which is the safe
+   * default: the guard runs.
+   */
+  isFree?(input: ModelInput, options?: ExtractOptions): Promise<boolean>;
 }
 
 export type StageName = "parse" | "extract" | "ground" | "validate" | "reconcile" | "finalise";

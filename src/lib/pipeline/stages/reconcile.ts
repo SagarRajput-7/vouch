@@ -5,7 +5,7 @@ import { assertWithinBudget, BudgetExceededError } from "@/lib/pipeline/budget";
 import { StageError } from "@/lib/pipeline/errors";
 import { getModelProvider } from "@/lib/pipeline/extract/model";
 import { groundExtraction } from "@/lib/pipeline/ground/extraction";
-import type { ModelProvider, Stage, StageContext, StageOutcome } from "@/lib/pipeline/types";
+import type { ExtractOptions, ModelInput, ModelProvider, Stage, StageContext, StageOutcome } from "@/lib/pipeline/types";
 import { documentsRepo } from "@/lib/repo/documents";
 import { extractionsRepo } from "@/lib/repo/extractions";
 import { issuesRepo } from "@/lib/repo/issues";
@@ -53,7 +53,12 @@ export const reconcileStage: Stage = {
     const blob = await getBlobStore().get(ctx.document.blobKey);
     if (!blob) throw new StageError("blob_missing", "The stored file could not be read.");
     const provider = getModelProvider();
-    if (provider.name !== "mock") {
+    const input: ModelInput = { bytes: blob.bytes, mime: ctx.document.mime as SupportedMime, sha256: ctx.document.sha256, filename: ctx.document.originalFilename };
+    const focus = { fieldPaths: [...new Set(arithmetic.flatMap((i) => i.fieldPaths))], reason: arithmetic.map((i) => i.message).join(" ") };
+    const options: ExtractOptions = { focus };
+    // A free answer (the mock, or a recorded reconcile) spends nothing, so the budget never
+    // stands between a sample and its second look.
+    if (!(await provider.isFree?.(input, options))) {
       try {
         await assertWithinBudget();
       } catch (err) {
@@ -66,13 +71,9 @@ export const reconcileStage: Stage = {
       }
     }
 
-    const focus = { fieldPaths: [...new Set(arithmetic.flatMap((i) => i.fieldPaths))], reason: arithmetic.map((i) => i.message).join(" ") };
     let attempt: Awaited<ReturnType<ModelProvider["extract"]>>;
     try {
-      attempt = await provider.extract(
-        { bytes: blob.bytes, mime: ctx.document.mime as SupportedMime, sha256: ctx.document.sha256, filename: ctx.document.originalFilename },
-        { focus },
-      );
+      attempt = await provider.extract(input, options);
     } catch (err) {
       // A refused or truncated second look still costs tokens, so the ledger hears about it.
       if (err instanceof StageError && err.usage) {

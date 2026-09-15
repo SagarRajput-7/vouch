@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ExtractOptions, ModelInput, ModelProvider, ModelUsage } from "@/lib/pipeline/types";
 import { groundTruthSchema, manifestSchema, type GroundTruth } from "./ground-truth";
-import { readRecording } from "./recordings";
+import { readRecording, RECORDINGS_DIR } from "./recordings";
+import { kindFor } from "./replay-provider";
 import { extractionResultSchema, fieldNames, type ExtractionResult } from "./schema";
 
 export type GroundTruthLookup = (sha256: string) => Promise<GroundTruth | null>;
@@ -60,7 +61,21 @@ export function groundTruthToExtraction(gt: GroundTruth): ExtractionResult {
 
 export class MockModelProvider implements ModelProvider {
   readonly name = "mock";
-  constructor(private readonly lookup: GroundTruthLookup = manifestLookup) {}
+  /**
+   * Recordings are consulted only for the default manifest lookup. An injected lookup is a test
+   * fixture built to say something specific about a sample, and a recording for that same sample
+   * hash would silently discard it.
+   */
+  private readonly useRecordings: boolean;
+
+  constructor(private readonly lookup: GroundTruthLookup = manifestLookup, private readonly dir: string = RECORDINGS_DIR) {
+    this.useRecordings = lookup === manifestLookup;
+  }
+
+  /** The mock never calls an API, so nothing it answers costs money. */
+  async isFree(): Promise<boolean> {
+    return true;
+  }
 
   /**
    * A recorded live answer for this file hash wins over the hand-written ground truth, so the
@@ -70,7 +85,7 @@ export class MockModelProvider implements ModelProvider {
    */
   async extract(input: ModelInput, options?: ExtractOptions) {
     const started = Date.now();
-    const rec = await readRecording(input.sha256, options?.focus ? "reconcile" : "initial");
+    const rec = this.useRecordings ? await readRecording(input.sha256, kindFor(options), this.dir) : null;
     const gt = rec ? null : await this.lookup(input.sha256);
     const result: ExtractionResult = rec
       ? rec.result

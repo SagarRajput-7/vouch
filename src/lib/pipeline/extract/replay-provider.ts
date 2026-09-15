@@ -1,13 +1,19 @@
 import type { ExtractOptions, ModelInput, ModelProvider, ModelUsage } from "@/lib/pipeline/types";
 import { readRecording, RECORDINGS_DIR, writeRecording, type Recording } from "./recordings";
 
-const kindFor = (options?: ExtractOptions): Recording["kind"] => (options?.focus ? "reconcile" : "initial");
+/** A focused re-read is a reconcile, anything else is the document's first look. */
+export const kindFor = (options?: ExtractOptions): Recording["kind"] => (options?.focus ? "reconcile" : "initial");
 
 /** Serves recorded sample extractions before touching the wrapped provider, so bundled samples never cost money. */
 export class ReplayingProvider implements ModelProvider {
   readonly name: string;
   constructor(private readonly inner: ModelProvider, private readonly dir: string = RECORDINGS_DIR) {
     this.name = inner.name;
+  }
+
+  /** A recorded answer spends nothing, so the caller can skip the budget guard for it. */
+  async isFree(input: ModelInput, options?: ExtractOptions): Promise<boolean> {
+    return (await readRecording(input.sha256, kindFor(options), this.dir)) !== null;
   }
 
   async extract(input: ModelInput, options?: ExtractOptions) {

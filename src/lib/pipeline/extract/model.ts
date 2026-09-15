@@ -17,6 +17,11 @@ export function setModelProviderForTests(provider: ModelProvider | null): void {
 export function getModelProvider(): ModelProvider {
   if (override) return override;
   if (llmMode === "mock") return new MockModelProvider();
-  if (llmMode === "record") return new RecordingProvider(new LiveModelProvider());
+  if (llmMode === "record") {
+    // Recording writes into samples/recordings, which is read-only on Vercel, and every request
+    // would spend money to refresh a file it cannot save. It is a local-script mode only.
+    if (process.env.VERCEL) throw new Error("LLM_MODE=record is for local scripts only");
+    return new RecordingProvider(new LiveModelProvider());
+  }
   return new ReplayingProvider(new LiveModelProvider());
 }
