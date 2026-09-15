@@ -37,15 +37,22 @@ export type RunJobOptions = {
   deadline?: number;
 };
 
-export async function runJob(job: Job, stages: Stage[] = STAGES, opts: RunJobOptions = {}): Promise<void> {
+/**
+ * How the job left the runner. `parked` is the one a caller must act on: the job is queued and
+ * immediately claimable again, so whoever is looping over claims has to stop rather than pick the
+ * same job straight back up.
+ */
+export type JobOutcome = "completed" | "parked" | "deferred" | "failed" | "retrying";
+
+export async function runJob(job: Job, stages: Stage[] = STAGES, opts: RunJobOptions = {}): Promise<JobOutcome> {
   if (!job.documentId) {
     await jobsRepo.complete(job.id);
-    return;
+    return "completed";
   }
   const document = await documentsRepo.getByIdUnscoped(job.documentId);
   if (!document) {
     await jobsRepo.complete(job.id);
-    return;
+    return "completed";
   }
   // One state object for the whole job: each stage gets its own run id spread over the same
   // context, so what parse put in `state` is still there when extract reads it.
@@ -60,7 +67,7 @@ export async function runJob(job: Job, stages: Stage[] = STAGES, opts: RunJobOpt
         await jobsRepo.defer(job.id, new Date(), "deadline: resumed on the next run");
         await documentsRepo.setStatus(document.id, "queued");
         log.info("job.paused_for_deadline", { jobId: job.id, documentId: document.id, stage: stage.name });
-        return;
+        return "parked";
       }
       await documentsRepo.setStatus(document.id, "processing");
       const run = await pipelineRunsRepo.start(document.id, stage.name, job.id);
@@ -79,13 +86,14 @@ export async function runJob(job: Job, stages: Stage[] = STAGES, opts: RunJobOpt
     }
     await jobsRepo.complete(job.id);
     log.info("job.succeeded", { jobId: job.id, documentId: document.id });
+    return "completed";
   } catch (err) {
     if (err instanceof BudgetExceededError) {
       const resumeAt = nextUtcMidnight();
       await jobsRepo.defer(job.id, resumeAt, err.message);
       await documentsRepo.setStatus(document.id, "queued", { code: err.code, message: err.userMessage });
       log.warn("job.deferred", { jobId: job.id, documentId: document.id, resumeAt: resumeAt.toISOString() });
-      return;
+      return "deferred";
     }
     const fatal = err instanceof StageError && !err.retryable;
     const failed = await jobsRepo.fail(job.id, errorMessage(err), { fatal });
@@ -93,9 +101,10 @@ export async function runJob(job: Job, stages: Stage[] = STAGES, opts: RunJobOpt
     if (failed?.status === "dead") {
       await documentsRepo.setStatus(document.id, "failed", failure);
       log.error("job.dead", { jobId: job.id, documentId: document.id, fatal, error: errorMessage(err) });
-    } else {
-      await documentsRepo.setStatus(document.id, "queued");
-      log.warn("job.retry", { jobId: job.id, documentId: document.id, attempts: failed?.attempts, error: errorMessage(err) });
+      return "failed";
     }
+    await documentsRepo.setStatus(document.id, "queued");
+    log.warn("job.retry", { jobId: job.id, documentId: document.id, attempts: failed?.attempts, error: errorMessage(err) });
+    return "retrying";
   }
 }

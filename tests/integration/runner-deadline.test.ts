@@ -8,6 +8,7 @@ import { runJob } from "@/lib/pipeline/runner";
 import { extractStage } from "@/lib/pipeline/stages/extract";
 import { parseStage } from "@/lib/pipeline/stages/parse";
 import { claimJobs } from "@/lib/queue/claim";
+import { drain } from "@/lib/queue/drain";
 import { documentsRepo } from "@/lib/repo/documents";
 import { jobsRepo } from "@/lib/repo/jobs";
 import { pipelineRunsRepo } from "@/lib/repo/pipeline-runs";
@@ -60,5 +61,28 @@ describe("per-job deadline", () => {
     await runJob(third, [parseStage, extractStage]);
     expect(await stages(s.docId)).toEqual(["parse:succeeded", "extract:succeeded"]);
     expect((await jobsRepo.getById(s.jobId))?.status).toBe("succeeded");
+  }, 60_000);
+
+  it("stops draining when a job parks, instead of claiming the same job straight back", async () => {
+    // A parked job is queued to run again immediately and is the oldest, so a claim loop that
+    // kept going would pick it up, park it, and pick it up again until its window closed, never
+    // reaching the newer job. Parse is checkpointed first so the park lands on extract (200s of
+    // budget against the 145s handed to the drain) without depending on how fast this machine is.
+    const first = await seed();
+    const second = await seed();
+    await runJob((await claim())!, [parseStage]);
+    await jobsRepo.requeue(first.jobId);
+
+    const result = await drain({ runnerId: "deadline-drain", reason: "test", deadlineMs: 145_000 });
+
+    expect(result.claimed).toBe(1);
+    const parked = await jobsRepo.getById(first.jobId);
+    expect(parked?.status).toBe("queued");
+    expect(parked?.attempts).toBe(0);
+    expect((await stages(first.docId)).filter((s) => s.startsWith("extract"))).toEqual([]);
+    const untouched = await jobsRepo.getById(second.jobId);
+    expect(untouched?.status).toBe("queued");
+    expect(untouched?.attempts).toBe(0);
+    expect(await stages(second.docId)).toEqual([]);
   }, 60_000);
 });

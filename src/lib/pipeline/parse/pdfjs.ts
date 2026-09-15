@@ -18,12 +18,17 @@ export function ensurePdfjs(): Promise<void> {
 /** Opens a PDF, translating pdf.js failures into fatal stage errors with plain messages. */
 export async function openPdf(bytes: Uint8Array) {
   await ensurePdfjs();
+  // pdf.js may take ownership of the buffer it is handed; always pass a copy. verbosity 0 keeps
+  // its font-substitution chatter (several lines per rendered page) out of the logs; real
+  // failures still arrive as exceptions.
+  const opening = getDocumentProxy(new Uint8Array(bytes), { verbosity: 0 });
   try {
-    // pdf.js may take ownership of the buffer it is handed; always pass a copy. verbosity 0 keeps
-    // its font-substitution chatter (several lines per rendered page) out of the logs; real
-    // failures still arrive as exceptions.
-    return await withTimeout(getDocumentProxy(new Uint8Array(bytes), { verbosity: 0 }), PARSE_LIMITS.pdfOperationTimeoutMs, "open document");
+    return await withTimeout(opening, PARSE_LIMITS.pdfOperationTimeoutMs, "open document");
   } catch (err) {
+    // The timeout does not cancel pdf.js. A document that finishes opening after the race was
+    // lost would hold its worker for the rest of the process, so it is destroyed on arrival.
+    // Nothing runs here when `opening` is what rejected: that promise has no value to clean up.
+    void opening.then((doc) => doc.loadingTask.destroy()).catch(() => undefined);
     // A timeout is already the specific, non-retryable answer; do not relabel it "unreadable".
     if (err instanceof StageError) throw err;
     const name = err instanceof Error ? err.name : "";
