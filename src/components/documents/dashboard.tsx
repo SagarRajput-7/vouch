@@ -51,7 +51,10 @@ export function Dashboard({ initialDocuments }: { initialDocuments: DocumentSumm
 
   function onFiles(files: File[], local: LocalRejection[]) {
     for (const r of local) toast.error(`${r.filename}: ${r.message}`);
-    if (files.length === 0) return;
+    if (files.length === 0) {
+      announce(describeResults([], local));
+      return;
+    }
     upload.mutate(files, {
       onSuccess: ({ results }) => {
         const summary = describeResults(results, local);

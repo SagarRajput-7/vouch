@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { LocalTime } from "@/components/ui-bits/local-time";
 import type { DocumentSummary } from "@/lib/api/documents";
 import { StatusChip } from "./status-chip";
 
@@ -10,10 +11,6 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatWhen(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 }
 
 type Props = {
@@ -49,7 +46,9 @@ export function DocumentList({ documents, onRetry, onDelete }: Props) {
                 </td>
                 <td className="px-4 py-3"><StatusChip status={d.status} /></td>
                 <td className="px-4 py-3 font-mono text-xs tabular">{formatBytes(d.byteSize)}</td>
-                <td className="px-4 py-3 text-muted-foreground">{formatWhen(d.createdAt)}</td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  <LocalTime iso={d.createdAt} />
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
                     {d.status === "failed" || d.status === "rejected" ? (

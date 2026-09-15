@@ -20,10 +20,15 @@ export default defineConfig({
     // migrates the PGlite directory as soon as the process boots. Deleting the directory from
     // globalSetup therefore deletes it out from under the already-running, already-migrated
     // server, corrupting it. See decisions.md, 2026-09-15.
-    command: process.env.CI ? `rm -rf .data/e2e && pnpm start -p ${PORT}` : `rm -rf .data/e2e && pnpm dev -p ${PORT}`,
+    // CI has no separate build step before the e2e job, so `pnpm start` alone would fail with
+    // no `.next` to serve: the CI command builds first. That build plus a from-scratch server
+    // boot is slower than local dev's already-warm `.next`, so CI also gets a longer timeout.
+    command: process.env.CI
+      ? `rm -rf .data/e2e && pnpm build && pnpm start -p ${PORT}`
+      : `rm -rf .data/e2e && pnpm dev -p ${PORT}`,
     url: `${baseURL}/api/health`,
     reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
+    timeout: process.env.CI ? 300_000 : 180_000,
     env: {
       PGLITE_DATA_DIR: ".data/e2e/pglite",
       LOCAL_DATA_DIR: ".data/e2e",
