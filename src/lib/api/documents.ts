@@ -1,5 +1,8 @@
 import { documentsRepo, type Document } from "@/lib/repo/documents";
 import { jobsRepo } from "@/lib/repo/jobs";
+import type { Invoice, LineItem } from "@/lib/repo/invoices";
+import type { Issue } from "@/lib/repo/issues";
+import type { ParsedPage } from "@/lib/pipeline/types";
 
 export type DocumentSummary = {
   id: string;
@@ -37,3 +40,21 @@ export async function listSummaries(workspaceId: string): Promise<DocumentSummar
   const docs = await documentsRepo.listByWorkspace(workspaceId);
   return Promise.all(docs.map(summarise));
 }
+
+/** Invoice row without the Postgres-only `search` tsvector column, which clients never need. */
+export function omitSearch(invoice: Invoice): Omit<Invoice, "search"> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- rest destructure drops `search` on purpose
+  const { search: _search, ...rest } = invoice;
+  return rest;
+}
+
+/** JSON shape of `GET /api/documents/:id`, for the review screen. Dates are ISO strings. */
+export type DocumentDetail = {
+  document: DocumentSummary;
+  invoice: Omit<Invoice, "search"> | null;
+  lineItems: LineItem[];
+  issues: Array<Pick<Issue, "id" | "code" | "severity" | "fieldPaths" | "message" | "suggestion" | "status" | "overrideReason"> & { createdAt: string; resolvedAt: string | null }>;
+  pages: Array<Omit<ParsedPage, "tokens">>;
+  usage: { calls: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; costMicros: number };
+  trace: Array<{ stage: string; status: string; startedAt: string; finishedAt: string | null; durationMs: number | null; error: string | null; meta: Record<string, unknown> }>;
+};
