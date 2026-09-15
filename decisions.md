@@ -277,3 +277,10 @@ A running log of the real calls made while building Vouch. Newest entries at the
 **Alternatives.** Blocking for every money field, as the spec's table reads; no rule for line items.
 **Reasoning.** The header amounts are the invoice's financial truth and must be seen on the page before anyone vouches for them. A line amount is already corroborated by the line-sum check, and one OCR miss on a 25-line scan should not stop verification of a document whose totals are grounded and add up.
 **Cut.** Nothing; the warning still surfaces the line in the review order.
+
+## 2026-09-15: Reconcile keeps whichever extraction has fewer blocking issues
+
+**Decision.** A second, focused extraction runs at most once per document and only when validation found an arithmetic contradiction. It replaces the first extraction only if it produces strictly fewer blocking issues. Rejected attempts stay in the extractions table with `adopted = false` for the trace.
+**Alternatives.** Always take the newer answer; merge field by field; ask the model to arbitrate.
+**Reasoning.** A re-read that introduces a new contradiction is worse for the reviewer than the original. Counting blocking issues is a cheap, explainable criterion, and keeping the losing attempt lets the trace show what the model said the second time.
+**Cut.** Field-level merging. It sounds smarter but makes the provenance of each value harder to explain.
