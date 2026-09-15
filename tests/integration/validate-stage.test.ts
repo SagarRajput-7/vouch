@@ -40,6 +40,24 @@ describe("validate stage", () => {
     expect((await documentsRepo.getByIdUnscoped(doc.id))?.status).toBe("processing");
   });
 
+  it("stores a mixed set with the blocking issue ahead of the warning", async () => {
+    const { info } = await startGuestSession();
+    const { doc, job } = await seed(info.workspaceId, "mismatch-total");
+    const { MockModelProvider, manifestLookup } = await import("@/lib/pipeline/extract/mock-provider");
+    setModelProviderForTests(
+      new MockModelProvider(async (sha) => {
+        const gt = await manifestLookup(sha);
+        return gt ? { ...gt, fields: { ...gt.fields, dueDate: { value: "2026-07-01", display: "01/07/2026", page: 1 } } } : null;
+      }),
+    );
+    await runJob(job, STAGES);
+    const issues = await issuesRepo.listByDocument(doc.id);
+    expect(issues.map((i) => [i.code, i.severity])).toEqual([
+      ["V003", "blocking"],
+      ["V005", "warning"],
+    ]);
+  });
+
   it("warns about a duplicate invoice already in the workspace", async () => {
     const { info } = await startGuestSession();
     const first = await seed(info.workspaceId, "clean-digital", "first.pdf");

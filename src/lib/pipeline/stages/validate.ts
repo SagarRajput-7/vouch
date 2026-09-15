@@ -1,5 +1,5 @@
 import { buildInvoice } from "@/lib/pipeline/draft";
-import type { Stage } from "@/lib/pipeline/types";
+import type { IssueDraft, Stage } from "@/lib/pipeline/types";
 import { validateInvoice } from "@/lib/pipeline/validate/rules";
 import { invoicesRepo } from "@/lib/repo/invoices";
 import { issuesRepo } from "@/lib/repo/issues";
@@ -17,7 +17,7 @@ export const validateStage: Stage = {
     const issues = validateInvoice({ draft, extraction, grounding, pages, duplicate, now: new Date() });
     await issuesRepo.replaceForDocument(ctx.documentId, issues);
     ctx.state.issues = issues;
-    const count = (severity: string) => issues.filter((i) => i.severity === severity).length;
+    const count = (severity: IssueDraft["severity"]) => issues.filter((i) => i.severity === severity).length;
     return { meta: { blocking: count("blocking"), warning: count("warning"), info: count("info"), codes: [...new Set(issues.map((i) => i.code))] } };
   },
 };

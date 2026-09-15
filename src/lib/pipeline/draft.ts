@@ -1,5 +1,5 @@
 import type { FieldMeta, InvoiceFields, LineItemMeta } from "@/lib/db/schema";
-import { parseMoney } from "@/lib/normalize/money";
+import { parseDecimal, parseMoney } from "@/lib/normalize/money";
 import { vendorKey } from "@/lib/normalize/vendor";
 import { fieldNames, type ExtractedScalar, type ExtractionResult } from "@/lib/pipeline/extract/schema";
 import { computeRisk, criticalityFor } from "@/lib/pipeline/risk";
@@ -45,8 +45,10 @@ export function buildInvoice(result: ExtractionResult) {
     return {
       idx,
       description: li.description.value,
-      quantity: li.quantity.value ? parseMoney(li.quantity.value)?.replace(/(\.\d{2})$/, "$100") ?? null : null,
-      unitPrice: li.unitPrice.value ? parseMoney(li.unitPrice.value)?.replace(/(\.\d{2})$/, "$100") ?? null : null,
+      // Four decimals, not cents: a metered line can price at 0.0125 and rounding here would
+      // make the line maths disagree with a correct amount.
+      quantity: li.quantity.value ? parseDecimal(li.quantity.value, 4) : null,
+      unitPrice: li.unitPrice.value ? parseDecimal(li.unitPrice.value, 4) : null,
       amount: money(li.amount),
       meta,
     };

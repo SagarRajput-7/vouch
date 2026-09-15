@@ -52,7 +52,7 @@ describe("validateInvoice", () => {
     expect(codes(issues)).toEqual(["V003"]);
     expect(issues[0]).toMatchObject({ severity: "blocking", suggestion: { fieldPath: "total", value: "791.70" } });
     expect(issues[0].fieldPaths).toEqual(["total", "subtotal", "tax"]);
-    expect(issues[0].message).toContain("719.70");
+    expect(issues[0].message).toBe("The subtotal and tax add up to 791.70 but the total reads 719.70.");
   });
 
   it("V003 proposes a missing tax when nothing else explains the difference", () => {
@@ -60,6 +60,18 @@ describe("validateInvoice", () => {
     e.fields.tax = { value: null, sourceText: null, page: null, confidence: 0.5 };
     const issues = validateInvoice(ctx(e));
     expect(issues.find((i) => i.code === "V003")?.suggestion).toEqual({ fieldPath: "tax", value: "134.48", reason: expect.stringContaining("tax") });
+  });
+
+  it("V003 subtracts a discount however its sign is printed", () => {
+    for (const discount of ["-50.00", "50.00"]) {
+      const e = sample("clean-digital");
+      e.fields.subtotal = { value: "1000.00", sourceText: "1,000.00", page: 1, confidence: 0.9 };
+      e.fields.tax = { value: null, sourceText: null, page: null, confidence: 0.9 };
+      e.fields.discount = { value: discount, sourceText: discount, page: 1, confidence: 0.9 };
+      e.fields.total = { value: "950.00", sourceText: "950.00", page: 1, confidence: 0.9 };
+      e.lineItems = [];
+      expect(codes(validateInvoice(ctx(e)))).not.toContain("V003");
+    }
   });
 
   it("V002 checks the line sum against the subtotal with a swap suggestion", () => {
@@ -73,12 +85,35 @@ describe("validateInvoice", () => {
     expect(v002.fieldPaths).toContain("lineItems.2.amount");
   });
 
+  it("V002 points at the line whose digits are swapped when the subtotal is right", () => {
+    const e = sample("mismatch-total");
+    e.lineItems[0].amount = { value: "426.00", sourceText: "426.00", page: 1, confidence: 0.9 };
+    const v002 = validateInvoice(ctx(e)).find((i) => i.code === "V002")!;
+    expect(v002.suggestion).toMatchObject({ fieldPath: "lineItems.0.amount", value: "462.00" });
+  });
+
   it("V004 warns on a line whose quantity times price is off", () => {
     const e = sample("mismatch-total");
     e.lineItems[0].amount = { value: "426.00", sourceText: "426.00", page: 1, confidence: 0.9 };
     const issues = validateInvoice(ctx(e));
     const v004 = issues.find((i) => i.code === "V004")!;
     expect(v004).toMatchObject({ severity: "warning", suggestion: { fieldPath: "lineItems.0.amount", value: "462.00" } });
+  });
+
+  it("V004 stays quiet on a metered line priced below a cent", () => {
+    const e = sample("clean-digital");
+    e.fields.subtotal = { value: "500.00", sourceText: "500.00", page: 1, confidence: 0.9 };
+    e.fields.tax = { value: null, sourceText: null, page: null, confidence: 0.9 };
+    e.fields.total = { value: "500.00", sourceText: "500.00", page: 1, confidence: 0.9 };
+    e.lineItems = [
+      {
+        description: { value: "API calls, August 2026", sourceText: "API calls, August 2026", page: 1, confidence: 0.9 },
+        quantity: { value: "40000", sourceText: "40,000", page: 1, confidence: 0.9 },
+        unitPrice: { value: "0.0125", sourceText: "0.0125", page: 1, confidence: 0.9 },
+        amount: { value: "500.00", sourceText: "500.00", page: 1, confidence: 0.9 },
+      },
+    ];
+    expect(validateInvoice(ctx(e))).toEqual([]);
   });
 
   it("V005 and V006 check date order and range", () => {
@@ -101,6 +136,13 @@ describe("validateInvoice", () => {
     const aud = sample("scan-lowres");
     aud.fields.total = { value: "280.50", sourceText: "$280.50", page: 1, confidence: 0.9 };
     expect(codes(validateInvoice(ctx(aud)))).not.toContain("V007");
+  });
+
+  it("V007 stays quiet when the header mixes currency symbols", () => {
+    const e = sample("euro-format");
+    e.fields.currency = { value: "USD", sourceText: "USD", page: 1, confidence: 0.6 };
+    e.fields.subtotal = { value: "1000.00", sourceText: "$1.000,00", page: 1, confidence: 0.9 };
+    expect(codes(validateInvoice(ctx(e)))).not.toContain("V007");
   });
 
   it("V008 links a duplicate", () => {

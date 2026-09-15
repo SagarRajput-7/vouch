@@ -24,7 +24,7 @@ export const issuesRepo = {
   },
 
   async listOpenDrafts(documentId: string): Promise<IssueDraft[]> {
-    const rows = await this.listByDocument(documentId);
+    const rows = await issuesRepo.listByDocument(documentId);
     return rows
       .filter((r) => r.status === "open")
       .map((r) => ({ code: r.code, severity: r.severity, fieldPaths: r.fieldPaths, message: r.message, suggestion: (r.suggestion as Record<string, unknown> | null) ?? null }));

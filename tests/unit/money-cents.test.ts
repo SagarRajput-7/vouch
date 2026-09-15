@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { absCents, fromCents, mulToCents, toCents } from "@/lib/normalize/money";
+import { absCents, fromCents, mulToCents, parseDecimal, toCents } from "@/lib/normalize/money";
 
 describe("cents helpers", () => {
   it("round-trips canonical strings", () => {
@@ -17,5 +17,16 @@ describe("cents helpers", () => {
   });
   it("absCents", () => {
     expect(absCents(BigInt(-7))).toBe(BigInt(7));
+  });
+});
+
+describe("parseDecimal", () => {
+  it("keeps sub-cent precision across locales and rounds half up", () => {
+    expect(parseDecimal("0.0125")).toBe("0.0125");
+    expect(parseDecimal("2,160")).toBe("2160.0000");
+    expect(parseDecimal("1.234,5")).toBe("1234.5000");
+    expect(parseDecimal("0.00005")).toBe("0.0001");
+    expect(parseDecimal("(2.5)")).toBe("-2.5000");
+    expect(parseDecimal("each")).toBeNull();
   });
 });

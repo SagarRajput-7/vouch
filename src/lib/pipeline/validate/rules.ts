@@ -29,7 +29,13 @@ const LOW_OCR = 0.6;
 const SEVERITY_RANK: Record<Severity, number> = { blocking: 0, warning: 1, info: 2 };
 
 const cents = (v: string | null): bigint => (v === null ? ZERO : toCents(v));
-const trim = (decimal: string): string => decimal.replace(/\.?0+$/, "").replace(/\.$/, "") || "0";
+/** Drops trailing zeros from the fraction only, so "38.5000" reads "38.5" and "100" stays "100". */
+const trim = (decimal: string): string => decimal.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+
+/** "subtotal", "subtotal and tax", "subtotal, tax and shipping". */
+function listWords(words: string[]): string {
+  return words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
 
 function issue(code: string, severity: Severity, fieldPaths: string[], message: string, suggestion: Record<string, unknown> | null = null): IssueDraft {
   return { code, severity, fieldPaths, message, suggestion };
@@ -72,7 +78,9 @@ function v003(ctx: ValidationContext): IssueDraft[] {
   const lineSum = lines.reduce((acc, l) => acc + toCents(l.amount), ZERO);
   const base = h.subtotal ?? (lines.length ? fromCents(lineSum) : null);
   if (base === null) return [];
-  const expected = toCents(base) + cents(h.tax) + cents(h.shipping) - cents(h.discount);
+  // A discount prints either way round ("50.00" or "-50.00", which parseMoney reads as negative),
+  // so its magnitude is what comes off the total.
+  const expected = toCents(base) + cents(h.tax) + cents(h.shipping) - absCents(cents(h.discount));
   if (absCents(expected - toCents(h.total)) <= BigInt(5)) return [];
   const paths = [
     "total",
@@ -88,7 +96,10 @@ function v003(ctx: ValidationContext): IssueDraft[] {
     suggestion = { fieldPath: "tax", value: fromCents(toCents(h.total) - expected), reason: "The difference looks like a tax amount that was not extracted." };
   }
   const basis = h.subtotal !== null ? "subtotal" : "line items";
-  return [issue("V003", "blocking", paths, `The ${basis}, tax, shipping and discount add up to ${fromCents(expected)} but the total reads ${h.total}.`, suggestion)];
+  const named = [basis, ...(h.tax !== null ? ["tax"] : []), ...(h.shipping !== null ? ["shipping"] : []), ...(h.discount !== null ? ["discount"] : [])];
+  // Naming only the amounts the invoice actually carries keeps the sentence true.
+  const clause = named.length === 1 && basis === "subtotal" ? `The subtotal is ${fromCents(expected)}` : `The ${listWords(named)} add up to ${fromCents(expected)}`;
+  return [issue("V003", "blocking", paths, `${clause} but the total reads ${h.total}.`, suggestion)];
 }
 
 function v004(ctx: ValidationContext): IssueDraft[] {
@@ -128,12 +139,12 @@ function v007(ctx: ValidationContext): IssueDraft[] {
   const code = ctx.draft.header.currency;
   if (!code) return [];
   const printed = HEADER_MONEY.map(([k]) => ctx.extraction.fields[k].sourceText ?? "").join(" ");
-  for (const [symbol, codes] of SYMBOLS) {
-    if (printed.includes(symbol) && !codes.includes(code)) {
-      return [issue("V007", "warning", ["currency"], `Amounts are printed with "${symbol}" but the currency reads ${code}.`, { fieldPath: "currency", value: codes[0], reason: "The symbol printed next to the amounts." })];
-    }
-  }
-  return [];
+  const found = SYMBOLS.filter(([symbol]) => printed.includes(symbol));
+  // Two different symbols across the header is a reading problem, not a currency we can propose.
+  if (found.length !== 1) return [];
+  const [symbol, codes] = found[0];
+  if (codes.includes(code)) return [];
+  return [issue("V007", "warning", ["currency"], `Amounts are printed with "${symbol}" but the currency reads ${code}.`, { fieldPath: "currency", value: codes[0], reason: "The symbol printed next to the amounts." })];
 }
 
 function v008(ctx: ValidationContext): IssueDraft[] {
@@ -161,9 +172,12 @@ function v010(ctx: ValidationContext): IssueDraft[] {
 }
 
 function v012(ctx: ValidationContext): IssueDraft[] {
-  return ctx.pages
-    .filter((p) => p.textSource === "ocr" && (p.ocrMeanConfidence ?? 0) < LOW_OCR)
-    .map((p) => issue("V012", "warning", [], `Text on page ${p.pageNo} was read by OCR with low confidence (${Math.round((p.ocrMeanConfidence ?? 0) * 100)}%). Check values from this page carefully.`));
+  return ctx.pages.flatMap((p) => {
+    const confidence = p.ocrMeanConfidence;
+    // Only a measured confidence warns: a page OCR never scored says nothing about its text.
+    if (p.textSource !== "ocr" || confidence === null || confidence >= LOW_OCR) return [];
+    return [issue("V012", "warning", [], `Text on page ${p.pageNo} was read by OCR with low confidence (${Math.round(confidence * 100)}%). Check values from this page carefully.`)];
+  });
 }
 
 /** Runs every rule. V011 (not an invoice) is raised by the extract stage, which rejects the document. */
