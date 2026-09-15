@@ -75,6 +75,7 @@ export async function claimJobs(opts: ClaimOptions): Promise<Job[]> {
       where j.id in (
         select id from ranked where workspace_rank <= ${opts.perWorkspace} and global_rank <= ${opts.global}
       )
+      and j.status = 'queued'
       order by j.created_at asc
       limit ${opts.limit}
       for update skip locked
@@ -87,6 +88,7 @@ export async function claimJobs(opts: ClaimOptions): Promise<Job[]> {
         updated_at = now()
     from candidate
     where jobs.id = candidate.id
+      and jobs.status = 'queued'
     returning jobs.*
   `);
   const rows = (Array.isArray(result) ? result : (result as { rows: RawJob[] }).rows) as RawJob[];

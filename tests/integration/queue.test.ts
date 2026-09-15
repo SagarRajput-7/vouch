@@ -20,6 +20,21 @@ async function docInNewWorkspace() {
 }
 
 describe("job queue", () => {
+  // Runs first deliberately: the jobs this file's other tests claim are left running rather
+  // than completed, so the table's running count only stays at the clean, predictable 0 this
+  // assertion needs if it runs before any of them.
+  it("respects the global cap across workspaces", async () => {
+    const a = await docInNewWorkspace();
+    const b = await docInNewWorkspace();
+    const c = await docInNewWorkspace();
+    await jobsRepo.enqueue({ ...a, kind: "process_document" });
+    await jobsRepo.enqueue({ ...b, kind: "process_document" });
+    await jobsRepo.enqueue({ ...c, kind: "process_document" });
+    const claimed = await claimJobs({ runnerId: "t", limit: 10, perWorkspace: 50, global: 2 });
+    expect(claimed).toHaveLength(2);
+    for (const job of claimed) expect(job.status).toBe("running");
+  });
+
   it("claims queued jobs oldest first and marks them running", async () => {
     const a = await docInNewWorkspace();
     const j1 = await jobsRepo.enqueue({ ...a, kind: "process_document" });

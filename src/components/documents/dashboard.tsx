@@ -5,6 +5,7 @@ import { useAnnouncer } from "@/components/layout/live-announcer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { anyInFlight, useDocuments } from "@/hooks/use-documents";
 import { useDelete, useLoadSamples, useRetry, useUpload } from "@/hooks/use-upload";
+import { useWorkspaceStatus } from "@/hooks/use-workspace-status";
 import type { DocumentSummary } from "@/lib/api/documents";
 import { ApiClientError, type UploadResult } from "@/lib/api-client";
 import { DocumentList } from "./document-list";
@@ -26,6 +27,12 @@ function describeResults(results: UploadResult[], local: LocalRejection[]): stri
 export function Dashboard({ initialDocuments }: { initialDocuments: DocumentSummary[] }) {
   const { announce } = useAnnouncer();
   const documents = useDocuments(initialDocuments);
+  const docs = documents.data ?? [];
+  // Polling this while anything is in flight is what actually triggers a server-side drain
+  // (see GET /api/workspace/status), so a job that failed once and got requeued, or a stale
+  // lock left by a killed function, has a path back to completion instead of sitting until
+  // someone happens to hit the API directly.
+  useWorkspaceStatus(anyInFlight(docs));
   const upload = useUpload();
   const samples = useLoadSamples();
   const retry = useRetry();
@@ -66,7 +73,6 @@ export function Dashboard({ initialDocuments }: { initialDocuments: DocumentSumm
     });
   }
 
-  const docs = documents.data ?? [];
   const busy = upload.isPending || samples.isPending;
 
   return (
