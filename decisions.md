@@ -287,7 +287,14 @@ A running log of the real calls made while building Vouch. Newest entries at the
 
 ## 2026-09-15: Samples replay recorded extractions in every mode
 
-**Decision.** Each bundled sample ships with the recorded live model output for its file hash. The mock provider replays it offline; the live provider replays it before calling the API. Only files that are not samples reach the model.
+**Decision.** A sample can ship with the recorded live model output for its file hash, produced by `pnpm samples:record` and committed under `samples/recordings/`. The mock provider replays that recording offline and the live provider replays it instead of calling the API, so only files that are not samples reach the model. No recordings are committed yet: until that script has been run against a real key, mock mode answers a sample from its hand-written ground truth and live mode extracts the samples for real.
 **Alternatives.** Replay only in mock mode; hand-written ground truth as the mock answer.
 **Reasoning.** Reviewers click "load samples" first. Replaying real model output means the demo shows real model behaviour, including its confidence values and any quirks, at zero cost and with no rate-limit risk, while their own uploads exercise the live path.
 **Cut.** Freshness. Recordings are refreshed by `pnpm samples:record` when the prompt version changes.
+
+## 2026-09-15: No temperature parameter
+
+**Decision.** Extraction sends no sampling parameters at all: no temperature, no top_p, no top_k. A test pins their absence from the request.
+**Alternatives.** `temperature: 0`, which the design spec named as the determinism lever.
+**Reasoning.** Sonnet 5 rejects sampling parameters outright, so a request carrying `temperature: 0` fails with a 400 rather than behaving deterministically. The levers that remain are the ones that matter more anyway: a structured output schema the answer has to satisfy, adaptive thinking, and a system prompt that forbids computing any value that is not printed. Repeatability is then checked where it counts, by grounding every value back to a box on the page.
+**Cut.** Nothing. The spec's intent survives; only the parameter it named is gone.
