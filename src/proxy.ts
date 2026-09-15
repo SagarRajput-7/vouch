@@ -10,6 +10,9 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(start);
 }
 
+// Narrowed to the routes that actually exist. /invoices, /how-it-works and /documents/:path*
+// are deferred to later plans; widen this again once they ship, so a guest hitting one of
+// them gets a session redirect instead of matching nothing and falling straight to a 404.
 export const config = {
-  matcher: ["/", "/documents/:path*", "/invoices", "/how-it-works"],
+  matcher: ["/"],
 };

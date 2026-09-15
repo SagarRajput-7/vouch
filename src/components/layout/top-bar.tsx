@@ -1,11 +1,7 @@
 import Link from "next/link";
 import { ThemeToggle } from "./theme-toggle";
 
-const links = [
-  { href: "/", label: "Documents" },
-  { href: "/invoices", label: "Ledger" },
-  { href: "/how-it-works", label: "How it works" },
-];
+const links = [{ href: "/", label: "Documents" }];
 
 export function TopBar() {
   return (

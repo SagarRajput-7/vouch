@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -39,9 +38,7 @@ export function DocumentList({ documents, onRetry, onDelete }: Props) {
             {documents.map((d) => (
               <tr key={d.id} className="border-t border-border">
                 <td className="px-4 py-3">
-                  <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
-                    {d.filename}
-                  </Link>
+                  <span className="font-medium hover:underline">{d.filename}</span>
                   {d.failureMessage ? <p className="mt-1 text-xs text-danger">{d.failureMessage}</p> : null}
                 </td>
                 <td className="px-4 py-3"><StatusChip status={d.status} /></td>
